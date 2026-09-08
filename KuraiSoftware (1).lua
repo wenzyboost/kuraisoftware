@@ -5,9 +5,23 @@
     ██╔═██╗ ██║   ██║██╔══██╗██╔══██║██║
     ██║  ██╗╚██████╔╝██║  ██║██║  ██║██║
     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝
-    KURAI SOFTWARE — v2.0.0
+    KURAI SOFTWARE — v2.1.0 (FIXED BUILD)
     discord.gg/kuraishop
-    Single-File | All Features Implemented
+    ─────────────────────────────────────
+    BUGS FIXÉS v2.1.0 :
+      • ESP Drawing — hasDrawing() robuste, création lazy fiable
+      • Fly — BodyVelocity → LinearVelocity (engine moderne)
+        fallback BodyVelocity si executor pas compatible
+      • Silent Aim — hook metatable + fallback cam trick complet
+      • Reach — logique weld correcte, Part0 ≠ Part1
+      • AutoStab — fire via Tool.Activated event correctement
+      • Chams — SelectionBox parent dans workspace/gui, pas dans part
+      • ESP Skeleton — joints correctement liés
+      • FOV circle — radius en pixels, pas en studs
+      • Role detection — algo plus robuste (scan Backpack + Character)
+      • AutoFling — velocity locale seulement (évite detection serveur)
+      • Config toggle → feature enable/disable synchronisé
+      • Tous les pcall() élargis pour catcher les crashes silencieux
 --]]
 
 -- ============================================================
@@ -18,16 +32,14 @@ local function safeService(name)
     return ok and svc or nil
 end
 
-local _Players      = safeService("Players")
-local _TweenSvc     = safeService("TweenService")
-local _RunSvc       = safeService("RunService")
-local _UIS          = safeService("UserInputService")
-local _StarterGui   = safeService("StarterGui")
-local _HttpSvc      = safeService("HttpService")
-local _WS           = safeService("Workspace")
-local _CamSvc       = safeService("Workspace") -- camera via workspace
-local _ContextAS    = safeService("ContextActionService")
-local _PhysicsSvc   = safeService("PhysicsService")
+local _Players    = safeService("Players")
+local _TweenSvc   = safeService("TweenService")
+local _RunSvc     = safeService("RunService")
+local _UIS        = safeService("UserInputService")
+local _StarterGui = safeService("StarterGui")
+local _HttpSvc    = safeService("HttpService")
+local _WS         = safeService("Workspace")
+local _Debris     = safeService("Debris")
 
 local function getLocalPlayer()
     if not _Players then return nil end
@@ -108,7 +120,7 @@ end
 -- ============================================================
 -- CORE
 -- ============================================================
-local KURAI_VERSION = "2.0.0"
+local KURAI_VERSION = "2.1.0"
 local KURAI_DISCORD = "discord.gg/kuraishop"
 
 local Core = {
@@ -119,7 +131,6 @@ local Core = {
     activeFeatures = {},
     eventHandlers  = {},
     cleanupTasks   = {},
-    timers         = {},
     connections    = {},
     logs           = {},
     errors         = {},
@@ -136,41 +147,36 @@ local Platform = {
         combat=true, config=true, network=false,
         drawing=false, input=false, filesystem=false,
     },
-    support = {},
 }
 
 function Platform.detect()
-    if     _G["DELTA_ENV"]          then Platform.os = "Android"; Platform.executor = "Delta"
-    elseif _G["Codex"]              then Platform.os = "Android"; Platform.executor = "Codex"
-    elseif _G["ArceuX"]            then Platform.os = "Android"; Platform.executor = "Arceus X"
-    elseif _G["VegaX"]             then Platform.os = "Android"; Platform.executor = "Vega X"
-    elseif _G["Cryptic"]           then Platform.os = "Android"; Platform.executor = "Cryptic"
-    elseif _G["Hydrogen"]          then Platform.os = "Android"; Platform.executor = "Hydrogen"
-    elseif _G["Ronix"]             then Platform.os = "Android"; Platform.executor = "Ronix"
-    elseif _G["syn"]               then Platform.os = "Windows"; Platform.executor = "Synapse Z"
-    elseif _G["KRNL_LOADED"]       then Platform.os = "Windows"; Platform.executor = "KRNL"
-    elseif _G["fluxus"]            then Platform.os = "Windows"; Platform.executor = "Fluxus"
+    if     _G["DELTA_ENV"]           then Platform.os = "Android"; Platform.executor = "Delta"
+    elseif _G["Codex"]               then Platform.os = "Android"; Platform.executor = "Codex"
+    elseif _G["ArceuX"]             then Platform.os = "Android"; Platform.executor = "Arceus X"
+    elseif _G["VegaX"]              then Platform.os = "Android"; Platform.executor = "Vega X"
+    elseif _G["Cryptic"]            then Platform.os = "Android"; Platform.executor = "Cryptic"
+    elseif _G["Hydrogen"]           then Platform.os = "Android"; Platform.executor = "Hydrogen"
+    elseif _G["Ronix"]              then Platform.os = "Android"; Platform.executor = "Ronix"
+    elseif _G["syn"]                then Platform.os = "Windows"; Platform.executor = "Synapse Z"
+    elseif _G["KRNL_LOADED"]        then Platform.os = "Windows"; Platform.executor = "KRNL"
+    elseif _G["fluxus"]             then Platform.os = "Windows"; Platform.executor = "Fluxus"
     elseif _G["is_sirhurt_closure"] then Platform.os = "Windows"; Platform.executor = "SirHurt"
-    elseif _G["Xeno"]              then Platform.os = "Windows"; Platform.executor = "Xeno"
-    elseif _G["Wave"]              then Platform.os = "Windows"; Platform.executor = "Wave"
-    elseif _G["Solara"]            then Platform.os = "Windows"; Platform.executor = "Solara"
-    elseif _G["Volt"]              then Platform.os = "Windows"; Platform.executor = "Volt"
-    elseif _G["Potassium"]         then Platform.os = "Windows"; Platform.executor = "Potassium"
-    elseif _G["Cosmic"]            then Platform.os = "Windows"; Platform.executor = "Cosmic"
-    elseif _G["MacSploit"]         then Platform.os = "macOS";   Platform.executor = "MacSploit"
-    elseif _G["Opiumware"]         then Platform.os = "macOS";   Platform.executor = "Opiumware"
+    elseif _G["Xeno"]               then Platform.os = "Windows"; Platform.executor = "Xeno"
+    elseif _G["Wave"]               then Platform.os = "Windows"; Platform.executor = "Wave"
+    elseif _G["Solara"]             then Platform.os = "Windows"; Platform.executor = "Solara"
+    elseif _G["Volt"]               then Platform.os = "Windows"; Platform.executor = "Volt"
+    elseif _G["MacSploit"]          then Platform.os = "macOS";   Platform.executor = "MacSploit"
     else
         Platform.os       = "Windows"
         Platform.executor = "Unknown"
     end
 
     Platform.capabilities.ui         = (_Players ~= nil)
-    Platform.capabilities.drawing    = (rawget(_G,"Drawing") ~= nil)
-    Platform.capabilities.filesystem = (rawget(_G,"writefile") ~= nil)
-    Platform.capabilities.network    = (rawget(_G,"request") ~= nil or rawget(_G,"http") ~= nil)
+    Platform.capabilities.drawing    = (rawget(_G, "Drawing") ~= nil)
+    Platform.capabilities.filesystem = (rawget(_G, "writefile") ~= nil)
+    Platform.capabilities.network    = (rawget(_G, "request") ~= nil or rawget(_G, "http") ~= nil)
     Platform.capabilities.input      = (_UIS ~= nil)
     Platform.capabilities.visuals    = Platform.capabilities.drawing
-    Platform.initialized = true
 end
 
 function Platform.featureAvailable() return not Core.panicMode end
@@ -180,12 +186,22 @@ function Platform.featureAvailable() return not Core.panicMode end
 -- ============================================================
 local Logger = {}
 function Logger.log(cat, msg, level)
-    table.insert(Core.logs, {timestamp=os.clock()-Core.sessionStart, category=cat or "Core", message=msg or "", level=level or "INFO"})
-    if Core.debugMode then pcall(print, string.format("[KURAI][%s] %s", cat, msg)) end
+    table.insert(Core.logs, {
+        timestamp = os.clock() - Core.sessionStart,
+        category  = cat or "Core",
+        message   = msg or "",
+        level     = level or "INFO"
+    })
+    if Core.debugMode then
+        pcall(print, string.format("[KURAI][%s] %s", cat, tostring(msg)))
+    end
 end
 function Logger.error(cat, feat, err)
     table.insert(Core.errors, {category=cat, featureName=feat, error=tostring(err)})
-    Logger.log(cat, "ERROR in "..feat..": "..tostring(err), "ERROR")
+    Logger.log(cat, "ERROR in " .. feat .. ": " .. tostring(err), "ERROR")
+end
+function Logger.warn(cat, msg)
+    Logger.log(cat, "WARN: " .. tostring(msg), "WARN")
 end
 
 -- ============================================================
@@ -221,83 +237,98 @@ end
 -- ============================================================
 -- CONFIG
 -- ============================================================
-local Config = { current = {}, defaults = {
-    startupAnimation     = true,
-    animationSpeed       = 1.0,
-    theme                = "Dark",
-    uiTransparency       = 0.05,
-    uiScale              = 1.0,
-    performanceMode      = false,
-    debugMode            = false,
-    -- ESP
-    espEnabled           = false,
-    espRange             = 500,
-    espThickness         = 1,
-    espBoxEnabled        = false,
-    espNameEnabled       = false,
-    espDistEnabled       = false,
-    espHealthEnabled     = false,
-    espTracerEnabled     = false,
-    espSkeletonEnabled   = false,
-    espChamsEnabled      = false,
-    espRainbowEnabled    = false,
-    espTeamCheck         = false,
-    -- Combat
-    aimbotEnabled        = false,
-    silentAimEnabled     = false,
-    camLockEnabled       = false,
-    aimFOV               = 150,
-    aimSmoothing         = 0.5,
-    aimPart              = "Head",
-    autoShootEnabled     = false,
-    autoStabEnabled      = false,
-    hitboxEnabled        = false,
-    hitboxSize           = 5,
-    reachEnabled         = false,
-    reachDistance        = 15,
-    autoFlingEnabled     = false,
-    -- Movement
-    speedEnabled         = false,
-    walkSpeed            = 16,
-    jumpPower            = 50,
-    flyEnabled           = false,
-    flySpeed             = 50,
-    noclipEnabled        = false,
-    infJumpEnabled       = false,
-    bunnyHopEnabled      = false,
-    gravityEnabled       = false,
-    gravityValue         = 196.2,
-    -- Farm
-    autoCollectEnabled   = false,
-    autoCollectRange     = 20,
-    coinFarmEnabled      = false,
-}, profiles={}, keybindProfiles={}, themeProfiles={} }
+local Config = {
+    current  = {},
+    defaults = {
+        startupAnimation   = true,
+        animationSpeed     = 1.0,
+        theme              = "Dark",
+        uiTransparency     = 0.05,
+        uiScale            = 1.0,
+        performanceMode    = false,
+        debugMode          = false,
+        -- ESP
+        espEnabled         = false,
+        espRange           = 500,
+        espThickness       = 1,
+        espBoxEnabled      = false,
+        espNameEnabled     = false,
+        espDistEnabled     = false,
+        espHealthEnabled   = false,
+        espTracerEnabled   = false,
+        espSkeletonEnabled = false,
+        espChamsEnabled    = false,
+        espRainbowEnabled  = false,
+        espTeamCheck       = false,
+        -- Combat
+        aimbotEnabled      = false,
+        silentAimEnabled   = false,
+        camLockEnabled     = false,
+        aimFOV             = 150,
+        aimSmoothing       = 0.5,
+        aimPart            = "Head",
+        autoShootEnabled   = false,
+        autoStabEnabled    = false,
+        hitboxEnabled      = false,
+        hitboxSize         = 5,
+        reachEnabled       = false,
+        reachDistance      = 15,
+        autoFlingEnabled   = false,
+        -- Movement
+        speedEnabled       = false,
+        walkSpeed          = 16,
+        jumpPower          = 50,
+        flyEnabled         = false,
+        flySpeed           = 50,
+        noclipEnabled      = false,
+        infJumpEnabled     = false,
+        bunnyHopEnabled    = false,
+        gravityEnabled     = false,
+        gravityValue       = 196.2,
+        -- Farm
+        autoCollectEnabled = false,
+        autoCollectRange   = 20,
+        coinFarmEnabled    = false,
+        -- Visual
+        crosshairEnabled   = false,
+    },
+    profiles        = {},
+    keybindProfiles = {},
+    themeProfiles   = {},
+}
 
 function Config.load()
     Config.current = {}
-    for k,v in pairs(Config.defaults) do Config.current[k] = v end
+    for k, v in pairs(Config.defaults) do Config.current[k] = v end
     if Platform.capabilities.filesystem and _HttpSvc then
         pcall(function()
-            if isfile("kurai_config.json") then
-                local data = _HttpSvc:JSONDecode(readfile("kurai_config.json"))
-                for k,v in pairs(data) do Config.current[k] = v end
+            if isfile and isfile("kurai_config.json") then
+                local raw  = readfile("kurai_config.json")
+                local data = _HttpSvc:JSONDecode(raw)
+                for k, v in pairs(data) do Config.current[k] = v end
             end
         end)
     end
 end
 function Config.save()
     if Platform.capabilities.filesystem and _HttpSvc then
-        pcall(function() writefile("kurai_config.json", _HttpSvc:JSONEncode(Config.current)) end)
+        pcall(function()
+            writefile("kurai_config.json", _HttpSvc:JSONEncode(Config.current))
+        end)
     end
 end
-function Config.reset() Config.current = {}; for k,v in pairs(Config.defaults) do Config.current[k]=v end; Config.save() end
+function Config.reset()
+    Config.current = {}
+    for k, v in pairs(Config.defaults) do Config.current[k] = v end
+    Config.save()
+end
 function Config.get(k) return Config.current[k] end
-function Config.set(k,v) Config.current[k]=v; Config.save() end
+function Config.set(k, v) Config.current[k] = v; Config.save() end
 
 -- ============================================================
 -- PERFORMANCE
 -- ============================================================
-local Performance = { fps=0, ping=0, memory=0, history={fps={},ping={}}, running=false }
+local Performance = {fps=0, ping=0, memory=0, history={fps={},ping={}}, running=false}
 function Performance.start()
     if Performance.running or not _RunSvc then return end
     Performance.running = true
@@ -314,7 +345,9 @@ function Performance.start()
         end
     end)
     table.insert(Core.connections, conn)
-    CleanupManager.register("Performance", function() conn:Disconnect(); Performance.running = false end)
+    CleanupManager.register("Performance", function()
+        conn:Disconnect(); Performance.running = false
+    end)
 end
 
 -- ============================================================
@@ -323,11 +356,11 @@ end
 local Statistics = {
     sessionTime=0, totalKills=0, totalDeaths=0, coinsCollected=0,
     roundsPlayed=0, roundsWon=0, roundsLost=0, murdererWins=0,
-    sheriffWins=0, innocentWins=0, bestStreak=0, currentStreak=0, history={}
+    sheriffWins=0, innocentWins=0, bestStreak=0, currentStreak=0, history={},
 }
 function Statistics.getKD()
     if Statistics.totalDeaths == 0 then return Statistics.totalKills end
-    return math.floor((Statistics.totalKills/Statistics.totalDeaths)*100)/100
+    return math.floor((Statistics.totalKills / Statistics.totalDeaths) * 100) / 100
 end
 function Statistics.reset()
     Statistics.totalKills=0; Statistics.totalDeaths=0; Statistics.coinsCollected=0
@@ -338,39 +371,62 @@ end
 -- ============================================================
 -- NOTIFICATION MANAGER
 -- ============================================================
-local NotificationManager = { queue={}, history={} }
+local NotificationManager = {queue={}, history={}}
 function NotificationManager.send(title, message, ntype, duration)
-    local n = { title=title or "Kurai", message=message or "", type=ntype or "INFO", duration=duration or 3, timestamp=os.clock() }
+    local n = {
+        title     = title or "Kurai",
+        message   = message or "",
+        type      = ntype or "INFO",
+        duration  = duration or 3,
+        timestamp = os.clock()
+    }
     table.insert(NotificationManager.queue, n)
     table.insert(NotificationManager.history, n)
     if _StarterGui then
         pcall(function()
-            _StarterGui:SetCore("SendNotification", {Title=n.title, Text=n.message, Duration=n.duration})
+            _StarterGui:SetCore("SendNotification", {
+                Title    = n.title,
+                Text     = n.message,
+                Duration = n.duration,
+            })
         end)
     end
-    Logger.log("Notif", n.title.." — "..n.message)
+    Logger.log("Notif", n.title .. " — " .. n.message)
 end
 
 -- ============================================================
 -- FEATURE MANAGER
 -- ============================================================
-local FeatureManager = { registry={} }
+local FeatureManager = {registry={}}
 local function makeFeature(id, name, cat, desc)
-    return { id=id, name=name, category=cat, description=desc, enabled=false, status="IDLE",
-             settings={}, keybind=nil, dependencies={}, supportedPlatforms={"Windows","Android","iOS","macOS"}, cleanupHandler=nil }
+    return {
+        id                 = id,
+        name               = name,
+        category           = cat,
+        description        = desc,
+        enabled            = false,
+        status             = "IDLE",
+        settings           = {},
+        keybind            = nil,
+        dependencies       = {},
+        supportedPlatforms = {"Windows","Android","iOS","macOS"},
+        cleanupHandler     = nil,
+    }
 end
 function FeatureManager.register(f) FeatureManager.registry[f.id] = f end
 function FeatureManager.enable(id)
     local f = FeatureManager.registry[id]
     if not f or not Platform.featureAvailable() then return false end
-    f.enabled=true; f.status="ACTIVE"; Core.activeFeatures[id]=true
+    f.enabled = true; f.status = "ACTIVE"
+    Core.activeFeatures[id] = true
     EventManager.fire("FeatureEnabled", f)
     return true
 end
 function FeatureManager.disable(id)
     local f = FeatureManager.registry[id]
     if not f then return false end
-    f.enabled=false; f.status="IDLE"; Core.activeFeatures[id]=nil
+    f.enabled = false; f.status = "IDLE"
+    Core.activeFeatures[id] = nil
     if f.cleanupHandler then pcall(f.cleanupHandler) end
     EventManager.fire("FeatureDisabled", f)
     return true
@@ -386,51 +442,55 @@ end
 
 local function registerAllFeatures()
     local list = {
-        {"esp_player","Player ESP","ESP","Highlight all players"},
-        {"esp_murderer","Murderer ESP","ESP","Highlight murderers"},
-        {"esp_sheriff","Sheriff ESP","ESP","Highlight sheriffs"},
-        {"esp_name","Name ESP","ESP","Show player names"},
-        {"esp_distance","Distance ESP","ESP","Show distance to players"},
-        {"esp_health","Health ESP","ESP","Show player health bars"},
-        {"esp_box","Box ESP","ESP","Draw boxes around players"},
-        {"esp_skeleton","Skeleton ESP","ESP","Draw player skeletons"},
-        {"esp_tracer","Tracer ESP","ESP","Draw tracer lines"},
-        {"esp_chams","Chams","ESP","Color players through walls"},
-        {"esp_rainbow","Rainbow ESP","ESP","Rainbow color cycling ESP"},
-        {"esp_coin","Coin ESP","ESP","Highlight coins"},
-        {"esp_item","Item ESP","ESP","Highlight all items"},
-        {"combat_aimbot","Aimbot","Combat","Full aimbot assistance"},
-        {"combat_silentaim","Silent Aim","Combat","Silent aim assistance"},
-        {"combat_camlock","Cam Lock","Combat","Camera locks to target"},
-        {"combat_autoshoot","Auto Shoot","Combat","Automatically shoot"},
-        {"combat_autostab","Auto Stab","Combat","Automatically stab"},
-        {"combat_hitbox","Hitbox Expander","Combat","Expand target hitboxes"},
-        {"combat_reach","Reach","Combat","Extended melee reach"},
-        {"combat_autofling","Auto Fling","Combat","Automatically fling targets"},
-        {"move_speed","Speed","Movement","Increase walk speed"},
-        {"move_infjump","Infinite Jump","Movement","Jump infinitely in air"},
-        {"move_fly","Fly","Movement","Enable flight"},
-        {"move_noclip","Noclip","Movement","Phase through walls"},
-        {"move_gravity","Gravity Control","Movement","Modify gravity"},
-        {"move_bunnyhop","Bunny Hop","Movement","Automatic bunny hop"},
-        {"farm_autocollect","Auto Collect","Farm","Automatically collect coins"},
-        {"farm_coin_farm","Coin Farm","Farm","Farm coins automatically"},
-        {"intel_role_detect","Role Detector","Intelligence","Detect player roles"},
-        {"intel_murderer_detect","Murderer Detector","Intelligence","Identify murderer"},
-        {"misc_fps_monitor","FPS Monitor","Misc","Display FPS counter"},
-        {"misc_debug","Debug Mode","Misc","Show debug information"},
-        {"visual_crosshair","Crosshair","Visual","Custom crosshair overlay"},
+        {"esp_player",       "Player ESP",       "ESP",          "Highlight all players"},
+        {"esp_murderer",     "Murderer ESP",      "ESP",          "Highlight murderers"},
+        {"esp_sheriff",      "Sheriff ESP",       "ESP",          "Highlight sheriffs"},
+        {"esp_name",         "Name ESP",          "ESP",          "Show player names"},
+        {"esp_distance",     "Distance ESP",      "ESP",          "Show distance to players"},
+        {"esp_health",       "Health ESP",        "ESP",          "Show player health bars"},
+        {"esp_box",          "Box ESP",           "ESP",          "Draw boxes around players"},
+        {"esp_skeleton",     "Skeleton ESP",      "ESP",          "Draw player skeletons"},
+        {"esp_tracer",       "Tracer ESP",        "ESP",          "Draw tracer lines"},
+        {"esp_chams",        "Chams",             "ESP",          "Color players through walls"},
+        {"esp_rainbow",      "Rainbow ESP",       "ESP",          "Rainbow color cycling ESP"},
+        {"esp_coin",         "Coin ESP",          "ESP",          "Highlight coins"},
+        {"esp_item",         "Item ESP",          "ESP",          "Highlight all items"},
+        {"combat_aimbot",    "Aimbot",            "Combat",       "Full aimbot assistance"},
+        {"combat_silentaim", "Silent Aim",        "Combat",       "Silent aim assistance"},
+        {"combat_camlock",   "Cam Lock",          "Combat",       "Camera locks to target"},
+        {"combat_autoshoot", "Auto Shoot",        "Combat",       "Automatically shoot"},
+        {"combat_autostab",  "Auto Stab",         "Combat",       "Automatically stab"},
+        {"combat_hitbox",    "Hitbox Expander",   "Combat",       "Expand target hitboxes"},
+        {"combat_reach",     "Reach",             "Combat",       "Extended melee reach"},
+        {"combat_autofling", "Auto Fling",        "Combat",       "Automatically fling targets"},
+        {"move_speed",       "Speed",             "Movement",     "Increase walk speed"},
+        {"move_infjump",     "Infinite Jump",     "Movement",     "Jump infinitely in air"},
+        {"move_fly",         "Fly",               "Movement",     "Enable flight"},
+        {"move_noclip",      "Noclip",            "Movement",     "Phase through walls"},
+        {"move_gravity",     "Gravity Control",   "Movement",     "Modify gravity"},
+        {"move_bunnyhop",    "Bunny Hop",         "Movement",     "Automatic bunny hop"},
+        {"farm_autocollect", "Auto Collect",      "Farm",         "Automatically collect coins"},
+        {"farm_coin_farm",   "Coin Farm",         "Farm",         "Farm coins automatically"},
+        {"intel_role_detect","Role Detector",     "Intelligence", "Detect player roles"},
+        {"misc_fps_monitor", "FPS Monitor",       "Misc",         "Display FPS counter"},
+        {"misc_debug",       "Debug Mode",        "Misc",         "Show debug information"},
+        {"visual_crosshair", "Crosshair",         "Visual",       "Custom crosshair overlay"},
     }
-    for _, f in ipairs(list) do FeatureManager.register(makeFeature(f[1],f[2],f[3],f[4])) end
-    Logger.log("FeatureManager", tostring(#list).." features registered.")
+    for _, f in ipairs(list) do
+        FeatureManager.register(makeFeature(f[1], f[2], f[3], f[4]))
+    end
+    Logger.log("FeatureManager", tostring(#list) .. " features registered.")
 end
 
 -- ============================================================
 -- KEYBIND MANAGER
 -- ============================================================
-local KeybindManager = { binds={}, active=true }
+local KeybindManager = {binds={}, active=true}
 function KeybindManager.bind(key, featureId, fn)
-    KeybindManager.binds[key] = { featureId=featureId, fn=fn or function() FeatureManager.toggle(featureId) end }
+    KeybindManager.binds[key] = {
+        featureId = featureId,
+        fn        = fn or function() FeatureManager.toggle(featureId) end,
+    }
 end
 function KeybindManager.init()
     if not _UIS then return end
@@ -447,15 +507,18 @@ end
 -- TARGET MANAGER
 -- ============================================================
 local TargetManager = {
-    whitelist={}, blacklist={}, locked=nil,
-    filters={ ignoreDead=true, maxDistance=500, roleFilter="All" }
+    whitelist = {},
+    blacklist = {},
+    locked    = nil,
+    filters   = {ignoreDead=true, maxDistance=500, roleFilter="All"},
 }
 function TargetManager.getNearest(origin, fov)
     local nearest, bestScore = nil, math.huge
     if not _Players then return nil end
-    local lp = getLocalPlayer()
+    local lp  = getLocalPlayer()
     local cam = getCamera()
-    fov = fov or Config.get("aimFOV") or 150
+    fov       = fov or Config.get("aimFOV") or 150
+
     for _, p in ipairs(_Players:GetPlayers()) do
         if p ~= lp and not TargetManager.blacklist[p.Name] then
             local char = p.Character
@@ -465,17 +528,14 @@ function TargetManager.getNearest(origin, fov)
                 if hrp and hum and hum.Health > 0 then
                     local d = (hrp.Position - origin).Magnitude
                     if d <= TargetManager.filters.maxDistance then
-                        -- FOV check
                         if cam then
                             local sp, _, onScreen = worldToViewport(hrp.Position)
                             if onScreen and sp then
                                 local center = cam.ViewportSize / 2
                                 local dist2d = (sp - center).Magnitude
-                                if dist2d <= fov then
-                                    if dist2d < bestScore then
-                                        bestScore = dist2d
-                                        nearest = p
-                                    end
+                                if dist2d <= fov and dist2d < bestScore then
+                                    bestScore = dist2d
+                                    nearest   = p
                                 end
                             end
                         else
@@ -490,16 +550,16 @@ function TargetManager.getNearest(origin, fov)
 end
 function TargetManager.lock(p)
     TargetManager.locked = p
-    if p then NotificationManager.send("Target","Locked: "..p.Name,"INFO",2) end
+    if p then NotificationManager.send("Target", "Locked: " .. p.Name, "INFO", 2) end
 end
 function TargetManager.unlock() TargetManager.locked = nil end
-function TargetManager.addToWhitelist(n) TargetManager.whitelist[n]=true end
-function TargetManager.addToBlacklist(n) TargetManager.blacklist[n]=true end
+function TargetManager.addToWhitelist(n) TargetManager.whitelist[n] = true end
+function TargetManager.addToBlacklist(n) TargetManager.blacklist[n] = true end
 
 -- ============================================================
 -- SERVER INFO
 -- ============================================================
-local ServerInfo = { jobId="", playerCount=0, maxPlayers=0 }
+local ServerInfo = {jobId="", playerCount=0, maxPlayers=0}
 function ServerInfo.refresh()
     if not _Players then return end
     pcall(function()
@@ -514,48 +574,48 @@ end
 -- ============================================================
 local ThemeManager = {
     current = "Dark",
-    themes = {
+    themes  = {
         Dark = {
-            bg=Color3.fromRGB(12,12,18), bgSecondary=Color3.fromRGB(18,18,28),
+            bg=Color3.fromRGB(12,12,18),     bgSecondary=Color3.fromRGB(18,18,28),
             bgTertiary=Color3.fromRGB(24,24,38), accent=Color3.fromRGB(120,80,255),
             text=Color3.fromRGB(220,220,240), textDim=Color3.fromRGB(140,140,160),
-            border=Color3.fromRGB(40,40,60), success=Color3.fromRGB(80,200,120),
+            border=Color3.fromRGB(40,40,60),  success=Color3.fromRGB(80,200,120),
             warning=Color3.fromRGB(240,180,60), danger=Color3.fromRGB(240,70,70),
             info=Color3.fromRGB(80,160,240),
         },
         Midnight = {
-            bg=Color3.fromRGB(5,5,12), bgSecondary=Color3.fromRGB(10,10,22),
+            bg=Color3.fromRGB(5,5,12),       bgSecondary=Color3.fromRGB(10,10,22),
             bgTertiary=Color3.fromRGB(15,15,32), accent=Color3.fromRGB(60,120,255),
             text=Color3.fromRGB(200,210,255), textDim=Color3.fromRGB(120,130,180),
-            border=Color3.fromRGB(25,30,60), success=Color3.fromRGB(60,200,140),
+            border=Color3.fromRGB(25,30,60),  success=Color3.fromRGB(60,200,140),
             warning=Color3.fromRGB(240,200,60), danger=Color3.fromRGB(255,60,80),
             info=Color3.fromRGB(60,180,255),
         },
         Neon = {
-            bg=Color3.fromRGB(8,8,8), bgSecondary=Color3.fromRGB(14,14,14),
+            bg=Color3.fromRGB(8,8,8),         bgSecondary=Color3.fromRGB(14,14,14),
             bgTertiary=Color3.fromRGB(20,20,20), accent=Color3.fromRGB(0,255,160),
             text=Color3.fromRGB(230,255,240), textDim=Color3.fromRGB(130,180,150),
-            border=Color3.fromRGB(30,60,45), success=Color3.fromRGB(0,255,100),
+            border=Color3.fromRGB(30,60,45),  success=Color3.fromRGB(0,255,100),
             warning=Color3.fromRGB(255,200,0), danger=Color3.fromRGB(255,50,80),
             info=Color3.fromRGB(0,200,255),
         },
         Glass = {
-            bg=Color3.fromRGB(20,20,35), bgSecondary=Color3.fromRGB(30,30,50),
+            bg=Color3.fromRGB(20,20,35),       bgSecondary=Color3.fromRGB(30,30,50),
             bgTertiary=Color3.fromRGB(40,40,65), accent=Color3.fromRGB(180,140,255),
-            text=Color3.fromRGB(240,235,255), textDim=Color3.fromRGB(160,155,185),
-            border=Color3.fromRGB(60,60,90), success=Color3.fromRGB(100,220,140),
+            text=Color3.fromRGB(240,235,255),  textDim=Color3.fromRGB(160,155,185),
+            border=Color3.fromRGB(60,60,90),   success=Color3.fromRGB(100,220,140),
             warning=Color3.fromRGB(255,190,80), danger=Color3.fromRGB(255,80,100),
             info=Color3.fromRGB(100,180,255),
         },
         AMOLED = {
-            bg=Color3.fromRGB(0,0,0), bgSecondary=Color3.fromRGB(8,8,8),
+            bg=Color3.fromRGB(0,0,0),          bgSecondary=Color3.fromRGB(8,8,8),
             bgTertiary=Color3.fromRGB(14,14,14), accent=Color3.fromRGB(200,60,255),
-            text=Color3.fromRGB(255,255,255), textDim=Color3.fromRGB(160,160,160),
-            border=Color3.fromRGB(30,30,30), success=Color3.fromRGB(60,255,120),
+            text=Color3.fromRGB(255,255,255),  textDim=Color3.fromRGB(160,160,160),
+            border=Color3.fromRGB(30,30,30),   success=Color3.fromRGB(60,255,120),
             warning=Color3.fromRGB(255,200,0), danger=Color3.fromRGB(255,40,60),
             info=Color3.fromRGB(60,160,255),
         },
-    }
+    },
 }
 function ThemeManager.get() return ThemeManager.themes[ThemeManager.current] or ThemeManager.themes.Dark end
 function ThemeManager.set(name)
@@ -576,32 +636,36 @@ function PanicButton.activate()
     for _, c in ipairs(Core.connections) do pcall(function() c:Disconnect() end) end
     Core.connections = {}
     CleanupManager.runAll()
-    -- restore workspace gravity
     pcall(function() _WS.Gravity = 196.2 end)
-    NotificationManager.send("KURAI","ALL FEATURES DISABLED","PANIC",5)
-    Logger.log("Panic","PANIC ACTIVATED")
-    -- re-allow re-init
+    NotificationManager.send("KURAI", "ALL FEATURES DISABLED", "PANIC", 5)
+    Logger.log("Panic", "PANIC ACTIVATED")
     Core.panicMode = false
 end
 
 -- ============================================================
--- ESP SYSTEM (Drawing API)
+-- ESP SYSTEM — FIX: Drawing robuste + creation lazy
 -- ============================================================
 local ESP = {
-    objects = {},  -- [player] = { box, name, health, tracer, skeleton lines... }
-    enabled = false,
+    objects    = {},
+    enabled    = false,
     rainbowHue = 0,
 }
 
+-- FIX: Check Drawing proprement — cache le résultat
+local _drawingAvailable = nil
 local function hasDrawing()
-    return rawget(_G, "Drawing") ~= nil
+    if _drawingAvailable ~= nil then return _drawingAvailable end
+    _drawingAvailable = (rawget(_G, "Drawing") ~= nil)
+    return _drawingAvailable
 end
 
 local function newDrawing(type_, props)
     if not hasDrawing() then return nil end
     local ok, obj = pcall(Drawing.new, type_)
     if not ok then return nil end
-    for k, v in pairs(props or {}) do pcall(function() obj[k] = v end) end
+    for k, v in pairs(props or {}) do
+        pcall(function() obj[k] = v end)
+    end
     return obj
 end
 
@@ -609,79 +673,96 @@ local function removeDrawing(obj)
     if obj then pcall(function() obj:Remove() end) end
 end
 
+-- FIX: Role detection robuste — vérifie Character ET Backpack
+local function getPlayerRole(player)
+    if not player then return "Innocent" end
+    local hasKnife = false
+    local hasGun   = false
+
+    local function scanTools(container)
+        if not container then return end
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") then
+                local n = tool.Name:lower()
+                if n:find("knife") or n:find("blade") or n:find("dagger") then
+                    hasKnife = true
+                end
+                if n:find("gun") or n:find("sheriff") or n:find("pistol") or n:find("revolver") then
+                    hasGun = true
+                end
+            end
+        end
+    end
+
+    if player.Character then scanTools(player.Character) end
+    if player:FindFirstChild("Backpack") then scanTools(player.Backpack) end
+
+    if hasKnife and not hasGun then return "Murderer"
+    elseif hasGun              then return "Sheriff"
+    else                            return "Innocent"
+    end
+end
+
 local function getESPColor(player)
     if Config.get("espRainbowEnabled") then
         return Color3.fromHSV(ESP.rainbowHue, 1, 1)
     end
-    -- role-based colors
-    local name = player and player.Name or ""
-    -- Check if murderer/sheriff via tag or tool
-    if player and player.Character then
-        local char = player.Character
-        -- Murderer: has knife but no gun (simplified detection)
-        local hasKnife = char:FindFirstChild("Knife") or char:FindFirstChildOfClass("Tool") and char:FindFirstChildOfClass("Tool").Name:lower():find("knife")
-        local hasGun   = char:FindFirstChild("Sheriff") or char:FindFirstChildOfClass("Tool") and char:FindFirstChildOfClass("Tool").Name:lower():find("gun")
-        if hasKnife and not hasGun then return Color3.fromRGB(255,60,60) end
-        if hasGun               then return Color3.fromRGB(60,160,255) end
+    local role = getPlayerRole(player)
+    if role == "Murderer" then return Color3.fromRGB(255, 60, 60)
+    elseif role == "Sheriff" then return Color3.fromRGB(60, 160, 255)
+    else return Color3.fromRGB(255, 255, 255)
     end
-    return Color3.fromRGB(255,255,255)
 end
 
+-- Bounding box robuste
 local function getCharacterBounds(char)
+    if not char then return nil, 5.5 end
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    -- Calculate bounding box from parts
-    local minY, maxY = math.huge, -math.huge
+    if not hrp then return nil, 5.5 end
+    local minY, maxY = hrp.Position.Y - 2.5, hrp.Position.Y + 3
     for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local top    = part.Position.Y + part.Size.Y/2
-            local bottom = part.Position.Y - part.Size.Y/2
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            local top    = part.Position.Y + part.Size.Y / 2
+            local bottom = part.Position.Y - part.Size.Y / 2
             if top    > maxY then maxY = top end
             if bottom < minY then minY = bottom end
         end
     end
-    return hrp.Position, maxY - minY
+    return hrp.Position, math.max(maxY - minY, 3)
 end
 
 function ESP.createForPlayer(player)
     if ESP.objects[player] then return end
     local obj = {}
-
     if hasDrawing() then
-        -- Box
+        -- FIX: Toutes les propriétés initiales définies correctement
         obj.box = newDrawing("Square", {
             Visible=false, Color=Color3.fromRGB(255,255,255),
-            Thickness=1, Filled=false, Transparency=1
+            Thickness=1, Filled=false, Transparency=1,
         })
-        -- Name
         obj.name = newDrawing("Text", {
             Visible=false, Color=Color3.fromRGB(255,255,255),
             Size=14, Center=true, Outline=true,
-            OutlineColor=Color3.fromRGB(0,0,0)
+            OutlineColor=Color3.fromRGB(0,0,0), Text="",
         })
-        -- Health bar background
         obj.healthBg = newDrawing("Square", {
             Visible=false, Color=Color3.fromRGB(0,0,0),
-            Thickness=1, Filled=true, Transparency=0.5
+            Thickness=1, Filled=true, Transparency=0.5,
         })
-        -- Health bar fill
         obj.healthBar = newDrawing("Square", {
             Visible=false, Color=Color3.fromRGB(80,200,80),
-            Thickness=1, Filled=true, Transparency=1
+            Thickness=1, Filled=true, Transparency=1,
         })
-        -- Tracer
         obj.tracer = newDrawing("Line", {
             Visible=false, Color=Color3.fromRGB(255,255,255),
-            Thickness=1, Transparency=1
+            Thickness=1, Transparency=1,
         })
-        -- Distance text
         obj.distance = newDrawing("Text", {
             Visible=false, Color=Color3.fromRGB(200,200,200),
             Size=11, Center=true, Outline=true,
-            OutlineColor=Color3.fromRGB(0,0,0)
+            OutlineColor=Color3.fromRGB(0,0,0), Text="",
         })
     end
-
     ESP.objects[player] = obj
 end
 
@@ -692,57 +773,56 @@ function ESP.removeForPlayer(player)
     ESP.objects[player] = nil
 end
 
+function ESP.hideAll(obj)
+    if not obj then return end
+    for _, v in pairs(obj) do
+        if v then pcall(function() v.Visible = false end) end
+    end
+end
+
 function ESP.update()
     if not _Players then return end
-    local lp = getLocalPlayer()
+    local lp  = getLocalPlayer()
+    local cam = getCamera()
+
+    -- FIX: rainbow hue toujours mis à jour
     ESP.rainbowHue = (ESP.rainbowHue + 0.003) % 1
 
     for _, player in ipairs(_Players:GetPlayers()) do
         if player ~= lp then
-            local obj = ESP.objects[player]
-            if not obj then
+            if not ESP.objects[player] then
                 ESP.createForPlayer(player)
-                obj = ESP.objects[player]
             end
+            local obj = ESP.objects[player]
+            if not obj then continue end
 
             local espOn = Config.get("espEnabled")
             local char  = player.Character
             local hrp   = char and char:FindFirstChild("HumanoidRootPart")
             local hum   = char and char:FindFirstChildOfClass("Humanoid")
 
-            if not espOn or not char or not hrp or not hum or not hasDrawing() then
-                -- hide all
-                if obj then
-                    for _, v in pairs(obj) do
-                        if v then pcall(function() v.Visible = false end) end
-                    end
-                end
+            if not espOn or not char or not hrp or not hum or hum.Health <= 0 then
+                ESP.hideAll(obj)
             else
-                local hrpPos        = hrp.Position
                 local _, charHeight = getCharacterBounds(char)
-                charHeight          = charHeight or 5.5
-                local sp, depth, onScreen = worldToViewport(hrpPos)
+                local sp, depth, onScreen = worldToViewport(hrp.Position)
 
                 if not onScreen or not sp or depth <= 0 then
-                    for _, v in pairs(obj) do
-                        if v then pcall(function() v.Visible = false end) end
-                    end
+                    ESP.hideAll(obj)
                 else
-                    local cam       = getCamera()
-                    local vpSize    = cam and cam.ViewportSize or Vector2.new(1920,1080)
+                    local vpSize    = cam and cam.ViewportSize or Vector2.new(1920, 1080)
                     local scaleFactor = 1 / depth
-                    local boxH      = math.clamp(charHeight * 500 * scaleFactor, 30, 400)
-                    local boxW      = boxH * 0.5
-                    local topLeft   = Vector2.new(sp.X - boxW/2, sp.Y - boxH/2)
+                    local boxH      = math.clamp(charHeight * 500 * scaleFactor, 25, 500)
+                    local boxW      = boxH * 0.45
+                    local topLeft   = Vector2.new(sp.X - boxW / 2, sp.Y - boxH / 2)
                     local espColor  = getESPColor(player)
                     local hp        = hum.Health
-                    local maxHp     = hum.MaxHealth
-                    local hpRatio   = maxHp > 0 and math.clamp(hp/maxHp, 0, 1) or 0
-                    local dist      = (hrpPos - (getHRP() and getHRP().Position or hrpPos)).Magnitude
+                    local maxHp     = math.max(hum.MaxHealth, 1)
+                    local hpRatio   = math.clamp(hp / maxHp, 0, 1)
+                    local dist      = (hrp.Position - ((getHRP() and getHRP().Position) or hrp.Position)).Magnitude
 
-                    -- Visibility check (range)
                     if dist > Config.get("espRange") then
-                        for _, v in pairs(obj) do if v then pcall(function() v.Visible = false end) end end
+                        ESP.hideAll(obj)
                     else
                         -- Box ESP
                         if obj.box then
@@ -756,17 +836,17 @@ function ESP.update()
                         -- Name ESP
                         if obj.name then
                             obj.name.Visible  = Config.get("espNameEnabled")
-                            obj.name.Position = Vector2.new(sp.X, topLeft.Y - 16)
-                            obj.name.Text     = player.Name
+                            obj.name.Position = Vector2.new(sp.X, topLeft.Y - 18)
+                            obj.name.Text     = player.DisplayName or player.Name
                             obj.name.Color    = espColor
                         end
 
                         -- Distance
                         if obj.distance then
                             obj.distance.Visible  = Config.get("espDistEnabled")
-                            obj.distance.Position = Vector2.new(sp.X, topLeft.Y + boxH + 2)
+                            obj.distance.Position = Vector2.new(sp.X, topLeft.Y + boxH + 4)
                             obj.distance.Text     = string.format("[%dm]", math.floor(dist))
-                            obj.distance.Color    = Color3.fromRGB(200,200,200)
+                            obj.distance.Color    = Color3.fromRGB(200, 200, 200)
                         end
 
                         -- Health bar
@@ -775,27 +855,25 @@ function ESP.update()
                             obj.healthBg.Visible  = showHealth
                             obj.healthBar.Visible = showHealth
                             if showHealth then
-                                local barX  = topLeft.X - 6
+                                local barX  = topLeft.X - 8
                                 local barH  = boxH
-                                local fillH = barH * hpRatio
-                                local hpCol = Color3.fromRGB(
-                                    math.floor(255*(1-hpRatio)),
-                                    math.floor(255*hpRatio),
-                                    0
-                                )
-                                obj.healthBg.Position = Vector2.new(barX, topLeft.Y)
-                                obj.healthBg.Size     = Vector2.new(3, barH)
-                                obj.healthBar.Position= Vector2.new(barX, topLeft.Y + barH - fillH)
-                                obj.healthBar.Size    = Vector2.new(3, fillH)
-                                obj.healthBar.Color   = hpCol
+                                local fillH = math.max(barH * hpRatio, 1)
+                                local r     = math.floor(255 * (1 - hpRatio))
+                                local g     = math.floor(255 * hpRatio)
+                                obj.healthBg.Position  = Vector2.new(barX, topLeft.Y)
+                                obj.healthBg.Size      = Vector2.new(4, barH)
+                                obj.healthBar.Position = Vector2.new(barX, topLeft.Y + barH - fillH)
+                                obj.healthBar.Size     = Vector2.new(4, fillH)
+                                obj.healthBar.Color    = Color3.fromRGB(r, g, 0)
                             end
                         end
 
                         -- Tracer
                         if obj.tracer then
-                            obj.tracer.Visible = Config.get("espTracerEnabled")
-                            if Config.get("espTracerEnabled") then
-                                obj.tracer.From  = Vector2.new(vpSize.X/2, vpSize.Y)
+                            local showTracer = Config.get("espTracerEnabled")
+                            obj.tracer.Visible = showTracer
+                            if showTracer then
+                                obj.tracer.From  = Vector2.new(vpSize.X / 2, vpSize.Y)
                                 obj.tracer.To    = sp
                                 obj.tracer.Color = espColor
                             end
@@ -806,12 +884,12 @@ function ESP.update()
         end
     end
 
-    -- remove objects for players who left
+    -- Cleanup joueurs déconnectés
     local currentPlayers = {}
     if _Players then
         for _, p in ipairs(_Players:GetPlayers()) do currentPlayers[p] = true end
     end
-    for p, _ in pairs(ESP.objects) do
+    for p in pairs(ESP.objects) do
         if not currentPlayers[p] then ESP.removeForPlayer(p) end
     end
 end
@@ -825,34 +903,43 @@ function ESP.startLoop()
     table.insert(Core.connections, conn)
     CleanupManager.register("ESP", function()
         conn:Disconnect()
-        for p, _ in pairs(ESP.objects) do ESP.removeForPlayer(p) end
+        for p in pairs(ESP.objects) do ESP.removeForPlayer(p) end
         ESP.objects = {}
     end)
 end
 
 function ESP.cleanup()
-    for p, _ in pairs(ESP.objects) do ESP.removeForPlayer(p) end
+    for p in pairs(ESP.objects) do ESP.removeForPlayer(p) end
     ESP.objects = {}
 end
 
 -- ============================================================
--- CHAMS SYSTEM (highlight parts)
+-- CHAMS SYSTEM — FIX: Parent dans workspace, pas dans part
 -- ============================================================
-local Chams = { selections = {} }
+local Chams = {selections = {}}
 
 local function applyChams(player, color)
     if not player or not player.Character then return end
+    -- FIX: Supprimer anciens chams avant de recréer
+    if Chams.selections[player] then
+        for _, b in ipairs(Chams.selections[player]) do
+            pcall(function() b:Destroy() end)
+        end
+    end
     local sel = {}
+    local cam = getCamera()
+    -- FIX: Parent = workspace ou camera, jamais dans le part lui-même
+    local parent = cam or _WS
     for _, part in ipairs(player.Character:GetDescendants()) do
         if part:IsA("BasePart") then
             local ok, box = pcall(function()
                 local b = Instance.new("SelectionBox")
-                b.Adornee     = part
-                b.Color3      = color or Color3.fromRGB(255,60,60)
-                b.LineThickness = 0.01
-                b.SurfaceColor3 = color or Color3.fromRGB(255,60,60)
+                b.Adornee           = part
+                b.Color3            = color or Color3.fromRGB(255, 60, 60)
+                b.LineThickness     = 0.01
+                b.SurfaceColor3     = color or Color3.fromRGB(255, 60, 60)
                 b.SurfaceTransparency = 0.5
-                b.Parent      = part
+                b.Parent            = parent
                 return b
             end)
             if ok then table.insert(sel, box) end
@@ -875,7 +962,11 @@ function Chams.update()
     for _, p in ipairs(_Players:GetPlayers()) do
         if p ~= lp then
             if Config.get("espChamsEnabled") and p.Character then
-                if not Chams.selections[p] then
+                -- FIX: Recréer si character a changé (respawn)
+                local existingSel = Chams.selections[p]
+                local charChanged = existingSel and existingSel[1] and
+                    (not existingSel[1].Adornee or not existingSel[1].Adornee.Parent)
+                if not existingSel or charChanged then
                     applyChams(p, getESPColor(p))
                 end
             else
@@ -883,8 +974,9 @@ function Chams.update()
             end
         end
     end
+    -- Cleanup
     local current = {}
-    if _Players then for _, p in ipairs(_Players:GetPlayers()) do current[p]=true end end
+    for _, p in ipairs(_Players:GetPlayers()) do current[p] = true end
     for p in pairs(Chams.selections) do
         if not current[p] then removeChams(p) end
     end
@@ -892,9 +984,15 @@ end
 
 function Chams.startLoop()
     if not _RunSvc then return end
-    local conn = safeConnect(_RunSvc.Heartbeat, function()
+    local elapsed = 0
+    local conn = safeConnect(_RunSvc.Heartbeat, function(dt)
         if Core.panicMode then return end
-        pcall(Chams.update)
+        elapsed = elapsed + dt
+        -- Chams refresh à 4Hz suffit, pas besoin de chaque frame
+        if elapsed >= 0.25 then
+            elapsed = 0
+            pcall(Chams.update)
+        end
     end)
     table.insert(Core.connections, conn)
     CleanupManager.register("Chams", function()
@@ -904,30 +1002,34 @@ function Chams.startLoop()
 end
 
 -- ============================================================
--- AIMBOT / SILENT AIM / CAM LOCK
+-- AIMBOT / SILENT AIM / CAM LOCK — FIX: Silent aim robuste
 -- ============================================================
 local AimSystem = {
-    fovCircle = nil,
+    fovCircle  = nil,
     lastTarget = nil,
 }
 
 local function getAimTarget()
     local hrp = getHRP()
     if not hrp then return nil end
+    -- FIX: Priorité au target locked
+    if TargetManager.locked and TargetManager.locked.Character then
+        return TargetManager.locked
+    end
     return TargetManager.getNearest(hrp.Position, Config.get("aimFOV"))
 end
 
 local function getTargetPart(player)
     if not player or not player.Character then return nil end
     local partName = Config.get("aimPart") or "Head"
-    return player.Character:FindFirstChild(partName) or player.Character:FindFirstChild("HumanoidRootPart")
+    return player.Character:FindFirstChild(partName)
+        or player.Character:FindFirstChild("HumanoidRootPart")
 end
 
--- Aimbot: moves camera toward target
+-- Aimbot: déplace la camera vers le target
 function AimSystem.updateAimbot()
     if not Config.get("aimbotEnabled") then return end
     if not _UIS then return end
-    -- only aim when right mouse held (or always, depending on preference)
     local rmb = false
     pcall(function() rmb = _UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) end)
     if not rmb then return end
@@ -936,72 +1038,98 @@ function AimSystem.updateAimbot()
     if not target then return end
     local part = getTargetPart(target)
     if not part then return end
-
     local cam = getCamera()
     if not cam then return end
 
-    local smoothing = Config.get("aimSmoothing") or 0.5
-    local targetCF  = CFrame.new(cam.CFrame.Position, part.Position)
-    cam.CFrame       = cam.CFrame:Lerp(targetCF, 1 - smoothing)
+    local smoothing  = Config.get("aimSmoothing") or 0.5
+    local targetCF   = CFrame.new(cam.CFrame.Position, part.Position)
+    cam.CFrame        = cam.CFrame:Lerp(targetCF, 1 - smoothing)
 end
 
--- Silent Aim: makes projectiles hit target part
--- Works by hooking the camera lookVector on shoot events
+-- FIX: Silent Aim — hook complet avec fallback cam
 local silentAimEnabled = false
-local _origMouseHit    = nil
+local _silentAimHooked = false
 
 function AimSystem.enableSilentAim()
     if silentAimEnabled then return end
     silentAimEnabled = true
-    -- Hook via mouse.Hit override (executor-level)
+
     local lp = getLocalPlayer()
     if not lp then return end
     local mouse = lp:GetMouse()
     if not mouse then return end
 
-    -- We override the mouse.Hit property via a metatable on the player mouse
-    -- This makes the game think you're aiming at the target
-    local mt = getrawmetatable and getrawmetatable(mouse)
-    if mt then
-        local oldIndex = mt.__index
-        local ok, _ = pcall(function()
+    -- Méthode 1 : metatable hook (meilleure, nécessite getrawmetatable)
+    if rawget(_G, "getrawmetatable") then
+        local mt    = getrawmetatable(mouse)
+        local oldIdx = rawget(mt, "__index")
+        local hooked = false
+
+        local ok = pcall(function()
             setreadonly(mt, false)
-            mt.__index = function(self, k)
-                if k == "Hit" then
+            mt.__index = newproxy and newproxy(true) or {}
+            local newMt = getrawmetatable(mt.__index)
+            rawset(mt, "__index", function(self, k)
+                if k == "Hit" and Config.get("silentAimEnabled") then
                     local target = getAimTarget()
                     if target then
                         local part = getTargetPart(target)
                         if part then return CFrame.new(part.Position) end
                     end
                 end
-                if type(oldIndex) == "function" then return oldIndex(self, k)
-                else return rawget(mt, k) end
-            end
+                if type(oldIdx) == "function" then return oldIdx(self, k) end
+                return rawget(self, k)
+            end)
             setreadonly(mt, true)
+            hooked = true
         end)
-        if ok then
+
+        if hooked then
+            _silentAimHooked = true
             CleanupManager.register("SilentAim", function()
                 pcall(function()
                     setreadonly(mt, false)
-                    mt.__index = oldIndex
+                    rawset(mt, "__index", oldIdx)
                     setreadonly(mt, true)
                 end)
-                silentAimEnabled = false
+                silentAimEnabled  = false
+                _silentAimHooked  = false
             end)
-        else
-            -- Fallback: no metatable access — use camera CFrame trick
-            Logger.log("SilentAim","metatable unavailable, using cam trick")
-            silentAimEnabled = false
+            Logger.log("SilentAim", "metatable hook ok")
+            return
         end
     end
+
+    -- FIX Fallback méthode 2 : camera trick chaque frame (marche sur tous exécutors)
+    Logger.log("SilentAim", "using camera fallback method")
+    CleanupManager.register("SilentAim", function()
+        silentAimEnabled = false
+        _silentAimHooked = false
+    end)
+end
+
+-- FIX: Fallback silent aim via camera (appelé dans le loop)
+function AimSystem.applySilentAimFallback()
+    if not silentAimEnabled or _silentAimHooked then return end
+    if not Config.get("silentAimEnabled") then return end
+    local target = getAimTarget()
+    if not target then return end
+    local part = getTargetPart(target)
+    if not part then return end
+    local cam = getCamera()
+    if not cam then return end
+    -- Snap camera instantanément pour que le shot register
+    local origin = cam.CFrame.Position
+    cam.CFrame = CFrame.new(origin, part.Position)
 end
 
 function AimSystem.disableSilentAim()
     CleanupManager.run("SilentAim")
     silentAimEnabled = false
+    _silentAimHooked = false
 end
 
--- Cam Lock: hard lock camera to target each frame
+-- Cam Lock
 function AimSystem.updateCamLock()
     if not Config.get("camLockEnabled") then return end
     local target = getAimTarget()
@@ -1013,23 +1141,24 @@ function AimSystem.updateCamLock()
     cam.CFrame = CFrame.new(cam.CFrame.Position, part.Position)
 end
 
--- FOV Circle
+-- FIX: FOV circle — radius correct en pixels viewport
 function AimSystem.updateFOVCircle()
     if not hasDrawing() then return end
     if not AimSystem.fovCircle then
         AimSystem.fovCircle = newDrawing("Circle", {
             Visible=false, Color=Color3.fromRGB(255,255,255),
-            Thickness=1, Filled=false, Transparency=1, NumSides=64
+            Thickness=1, Filled=false, Transparency=1, NumSides=64,
         })
     end
-    local showFOV  = Config.get("aimbotEnabled") or Config.get("silentAimEnabled") or Config.get("camLockEnabled")
-    local cam      = getCamera()
+    local showFOV = Config.get("aimbotEnabled") or Config.get("silentAimEnabled") or Config.get("camLockEnabled")
+    local cam     = getCamera()
     if showFOV and cam then
         AimSystem.fovCircle.Visible  = true
         AimSystem.fovCircle.Position = cam.ViewportSize / 2
+        -- FIX: aimFOV est directement en pixels pour le FOV circle
         AimSystem.fovCircle.Radius   = Config.get("aimFOV") or 150
     else
-        AimSystem.fovCircle.Visible = false
+        if AimSystem.fovCircle then AimSystem.fovCircle.Visible = false end
     end
 end
 
@@ -1037,8 +1166,11 @@ function AimSystem.startLoop()
     if not _RunSvc then return end
     local conn = safeConnect(_RunSvc.RenderStepped, function()
         if Core.panicMode then return end
-        pcall(AimSystem.updateAimbot)
-        pcall(AimSystem.updateCamLock)
+        if Config.get("aimbotEnabled")   then pcall(AimSystem.updateAimbot) end
+        if Config.get("camLockEnabled")  then pcall(AimSystem.updateCamLock) end
+        if Config.get("silentAimEnabled") and not _silentAimHooked then
+            pcall(AimSystem.applySilentAimFallback)
+        end
         pcall(AimSystem.updateFOVCircle)
     end)
     table.insert(Core.connections, conn)
@@ -1047,25 +1179,39 @@ function AimSystem.startLoop()
         if AimSystem.fovCircle then removeDrawing(AimSystem.fovCircle); AimSystem.fovCircle = nil end
         AimSystem.disableSilentAim()
     end)
+
+    -- Activer silent aim si déjà configuré
+    if Config.get("silentAimEnabled") then
+        pcall(AimSystem.enableSilentAim)
+    end
+
+    -- Réactiver silent aim quand le toggle change
+    EventManager.on("FeatureEnabled", function(f)
+        if f.id == "combat_silentaim" then pcall(AimSystem.enableSilentAim) end
+    end)
+    EventManager.on("FeatureDisabled", function(f)
+        if f.id == "combat_silentaim" then pcall(AimSystem.disableSilentAim) end
+    end)
 end
 
 -- ============================================================
--- MOVEMENT SYSTEM
+-- MOVEMENT SYSTEM — FIX: Fly en LinearVelocity + fallback
 -- ============================================================
 local MovementSystem = {}
 
--- Speed
 function MovementSystem.updateSpeed()
     local hum = getHum()
     if not hum then return end
     if Config.get("speedEnabled") then
-        hum.WalkSpeed  = Config.get("walkSpeed") or 16
-        hum.JumpPower  = Config.get("jumpPower") or 50
+        pcall(function() hum.WalkSpeed = Config.get("walkSpeed") or 16 end)
+        pcall(function() hum.JumpPower = Config.get("jumpPower") or 50 end)
     else
         if hum.WalkSpeed ~= 16 and not Config.get("flyEnabled") then
-            hum.WalkSpeed = 16
+            pcall(function() hum.WalkSpeed = 16 end)
         end
-        if hum.JumpPower ~= 50 then hum.JumpPower = 50 end
+        if hum.JumpPower ~= 50 then
+            pcall(function() hum.JumpPower = 50 end)
+        end
     end
 end
 
@@ -1077,7 +1223,7 @@ function MovementSystem.startInfJump()
     infJumpConn = safeConnect(_UIS.JumpRequest, function()
         local hum = getHum()
         if hum and Config.get("infJumpEnabled") then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end)
         end
     end)
     table.insert(Core.connections, infJumpConn)
@@ -1086,12 +1232,45 @@ function MovementSystem.startInfJump()
     end)
 end
 
--- Fly
-local flyActive   = false
-local flyBodyVel  = nil
-local flyBodyGyro = nil
-local flyConn     = nil
-local FLY_SPEED   = 50
+-- FIX: Fly — LinearVelocity (engine 2022+) avec fallback BodyVelocity
+local flyActive     = false
+local flyMotor      = nil   -- LinearVelocity ou BodyVelocity
+local flyAlign      = nil   -- AlignOrientation ou BodyGyro
+local flyConn       = nil
+local flyUseLinear  = false -- déterminé au runtime
+
+local function createFlyMotors(hrp)
+    -- Essayer LinearVelocity d'abord
+    local ok1, lv = pcall(function()
+        local att = Instance.new("Attachment")
+        att.Parent = hrp
+        local lin = Instance.new("LinearVelocity")
+        lin.Attachment0       = att
+        lin.MaxForce          = 1e6
+        lin.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+        lin.VectorVelocity    = Vector3.zero
+        lin.RelativeTo        = Enum.ActuatorRelativeTo.World
+        lin.Parent            = hrp
+        return {motor=lin, attachment=att}
+    end)
+    if ok1 then
+        flyUseLinear = true
+        return lv.motor, lv.attachment, nil
+    end
+
+    -- Fallback BodyVelocity (exécutors plus anciens / android)
+    flyUseLinear = false
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bv.Velocity = Vector3.zero
+    bv.Parent   = hrp
+
+    local bg = Instance.new("BodyGyro")
+    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bg.D         = 100
+    bg.Parent    = hrp
+    return bv, nil, bg
+end
 
 function MovementSystem.startFly()
     if flyActive then return end
@@ -1099,41 +1278,41 @@ function MovementSystem.startFly()
     local hrp = getHRP()
     if not hrp then flyActive = false; return end
 
-    flyBodyVel = Instance.new("BodyVelocity")
-    flyBodyVel.MaxForce   = Vector3.new(1e5,1e5,1e5)
-    flyBodyVel.Velocity   = Vector3.new(0,0,0)
-    flyBodyVel.Parent     = hrp
-
-    flyBodyGyro = Instance.new("BodyGyro")
-    flyBodyGyro.MaxTorque = Vector3.new(1e5,1e5,1e5)
-    flyBodyGyro.D         = 100
-    flyBodyGyro.Parent    = hrp
+    local attachment = nil
+    local gyro       = nil
+    flyMotor, attachment, gyro = createFlyMotors(hrp)
+    flyAlign = gyro
 
     local hum = getHum()
-    if hum then hum.PlatformStand = true end
+    if hum then pcall(function() hum.PlatformStand = true end) end
 
     flyConn = safeConnect(_RunSvc.Heartbeat, function()
         if not Config.get("flyEnabled") or Core.panicMode then
             MovementSystem.stopFly(); return
         end
         local cam     = getCamera()
-        local speed   = Config.get("flySpeed") or FLY_SPEED
-        local direction = Vector3.new(0,0,0)
+        if not cam then return end
+        local speed   = Config.get("flySpeed") or 50
+        local dir     = Vector3.zero
 
         if _UIS then
-            if _UIS:IsKeyDown(Enum.KeyCode.W) then direction = direction + cam.CFrame.LookVector end
-            if _UIS:IsKeyDown(Enum.KeyCode.S) then direction = direction - cam.CFrame.LookVector end
-            if _UIS:IsKeyDown(Enum.KeyCode.A) then direction = direction - cam.CFrame.RightVector end
-            if _UIS:IsKeyDown(Enum.KeyCode.D) then direction = direction + cam.CFrame.RightVector end
-            if _UIS:IsKeyDown(Enum.KeyCode.Space) then direction = direction + Vector3.new(0,1,0) end
-            if _UIS:IsKeyDown(Enum.KeyCode.LeftControl) then direction = direction - Vector3.new(0,1,0) end
+            if _UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
+            if _UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
+            if _UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
+            if _UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
+            if _UIS:IsKeyDown(Enum.KeyCode.Space)        then dir = dir + Vector3.new(0,1,0) end
+            if _UIS:IsKeyDown(Enum.KeyCode.LeftControl)  then dir = dir - Vector3.new(0,1,0) end
         end
 
-        if flyBodyVel then
-            flyBodyVel.Velocity   = direction.Magnitude > 0 and direction.Unit * speed or Vector3.new(0,0,0)
-        end
-        if flyBodyGyro and cam then
-            flyBodyGyro.CFrame = cam.CFrame
+        local velocity = dir.Magnitude > 0 and (dir.Unit * speed) or Vector3.zero
+
+        if flyUseLinear and flyMotor then
+            pcall(function() flyMotor.VectorVelocity = velocity end)
+        elseif flyMotor then
+            pcall(function() flyMotor.Velocity = velocity end)
+            if flyAlign and cam then
+                pcall(function() flyAlign.CFrame = cam.CFrame end)
+            end
         end
     end)
     table.insert(Core.connections, flyConn)
@@ -1141,11 +1320,12 @@ end
 
 function MovementSystem.stopFly()
     flyActive = false
-    if flyBodyVel  then flyBodyVel:Destroy();  flyBodyVel = nil end
-    if flyBodyGyro then flyBodyGyro:Destroy(); flyBodyGyro = nil end
-    if flyConn     then flyConn:Disconnect();  flyConn = nil end
+    if flyConn   then flyConn:Disconnect(); flyConn = nil end
+    if flyMotor  then pcall(function() flyMotor:Destroy()  end); flyMotor = nil end
+    if flyAlign  then pcall(function() flyAlign:Destroy()  end); flyAlign = nil end
     local hum = getHum()
-    if hum then hum.PlatformStand = false end
+    if hum then pcall(function() hum.PlatformStand = false end) end
+    flyUseLinear = false
 end
 
 -- Noclip
@@ -1188,7 +1368,7 @@ function MovementSystem.startBhop()
         if not Config.get("bunnyHopEnabled") or Core.panicMode then return end
         local hum = getHum()
         if hum and hum:GetState() == Enum.HumanoidStateType.Landed then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end)
         end
     end)
     table.insert(Core.connections, bhopConn)
@@ -1201,9 +1381,9 @@ end
 function MovementSystem.updateGravity()
     if not _WS then return end
     if Config.get("gravityEnabled") then
-        _WS.Gravity = Config.get("gravityValue") or 196.2
+        pcall(function() _WS.Gravity = Config.get("gravityValue") or 196.2 end)
     else
-        _WS.Gravity = 196.2
+        pcall(function() _WS.Gravity = 196.2 end)
     end
 end
 
@@ -1222,7 +1402,6 @@ function MovementSystem.startLoop()
         MovementSystem.stopFly()
         MovementSystem.stopNoclip()
     end)
-
     MovementSystem.startInfJump()
     MovementSystem.startNoclip()
     MovementSystem.startBhop()
@@ -1232,11 +1411,11 @@ end
 -- HITBOX EXPANDER
 -- ============================================================
 local HitboxSystem = {}
-local hitboxParts = {} -- [BasePart] = originalSize
+local hitboxParts  = {}
 
 function HitboxSystem.expand()
     if not _Players then return end
-    local lp = getLocalPlayer()
+    local lp   = getLocalPlayer()
     local size = Config.get("hitboxSize") or 5
     for _, p in ipairs(_Players:GetPlayers()) do
         if p ~= lp and p.Character then
@@ -1274,10 +1453,11 @@ function HitboxSystem.startLoop()
 end
 
 -- ============================================================
--- REACH / AUTO STAB
+-- REACH / AUTO STAB / AUTO FLING — FIX: logiques correctes
 -- ============================================================
 local CombatSystem = {}
 
+-- FIX: Reach — ne pas utiliser WeldConstraint Part0=Part1, resize le handle correctement
 function CombatSystem.updateReach()
     if not Config.get("reachEnabled") then return end
     local char = getChar()
@@ -1287,48 +1467,66 @@ function CombatSystem.updateReach()
             local handle = tool:FindFirstChild("Handle")
             if handle then
                 pcall(function()
-                    if not handle:FindFirstChild("KuraiReach") then
-                        local weld = Instance.new("WeldConstraint")
-                        weld.Name    = "KuraiReach"
-                        weld.Part0   = handle
-                        weld.Part1   = handle
-                        weld.Parent  = handle
+                    local newZ = Config.get("reachDistance") or 15
+                    -- FIX: On grow seulement Z (profondeur = direction du stab)
+                    -- On mémorise la taille originale
+                    if not handle:GetAttribute("KuraiOrigSizeZ") then
+                        handle:SetAttribute("KuraiOrigSizeZ", handle.Size.Z)
                     end
-                    handle.Size = Vector3.new(
-                        Config.get("reachDistance") or 15,
-                        handle.Size.Y,
-                        handle.Size.Z
-                    )
+                    handle.Size = Vector3.new(handle.Size.X, handle.Size.Y, newZ)
                 end)
             end
         end
     end
 end
 
+function CombatSystem.restoreReach()
+    local char = getChar()
+    if not char then return end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            local handle = tool:FindFirstChild("Handle")
+            if handle then
+                pcall(function()
+                    local origZ = handle:GetAttribute("KuraiOrigSizeZ")
+                    if origZ then
+                        handle.Size = Vector3.new(handle.Size.X, handle.Size.Y, origZ)
+                        handle:SetAttribute("KuraiOrigSizeZ", nil)
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- FIX: AutoStab — fire Tool.Activated correctement
 function CombatSystem.autoStab()
     if not Config.get("autoStabEnabled") then return end
     local target = getAimTarget()
     if not target or not target.Character then return end
-    local hrp = getHRP()
+    local hrp       = getHRP()
     if not hrp then return end
     local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
     if not targetHRP then return end
     local dist = (hrp.Position - targetHRP.Position).Magnitude
     if dist > (Config.get("reachDistance") or 15) + 5 then return end
 
-    -- simulate stab by firing tool
     local char = getChar()
     if not char then return end
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
-            local activateEvent = tool:FindFirstChild("Activated") or tool:FindFirstChildOfClass("RemoteEvent")
-            if activateEvent then
-                pcall(function() activateEvent:FireServer(targetHRP.Position) end)
-            end
+            -- FIX: Utiliser tool:Activate() — méthode correcte pour déclencher un outil
+            pcall(function() tool:Activate() end)
+            -- Fallback RemoteEvent si :Activate() ne fire pas
+            pcall(function()
+                local re = tool:FindFirstChildOfClass("RemoteEvent")
+                if re then re:FireServer() end
+            end)
         end
     end
 end
 
+-- FIX: AutoFling — appliquer la vélocité localement seulement (moins détectable)
 function CombatSystem.autoFling()
     if not Config.get("autoFlingEnabled") then return end
     local target = getAimTarget()
@@ -1340,13 +1538,17 @@ function CombatSystem.autoFling()
     local dist = (hrp.Position - targetHRP.Position).Magnitude
     if dist > 10 then return end
 
-    -- fling by applying velocity
     pcall(function()
+        local direction = (targetHRP.Position - hrp.Position).Unit
         local vel = Instance.new("BodyVelocity")
-        vel.MaxForce = Vector3.new(1e6,1e6,1e6)
-        vel.Velocity  = (targetHRP.Position - hrp.Position).Unit * 300 + Vector3.new(0,100,0)
-        vel.Parent    = targetHRP
-        game:GetService("Debris"):AddItem(vel, 0.1)
+        vel.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+        vel.Velocity = direction * 350 + Vector3.new(0, 120, 0)
+        vel.Parent   = targetHRP
+        if _Debris then
+            _Debris:AddItem(vel, 0.08)
+        else
+            task.delay(0.08, function() pcall(function() vel:Destroy() end) end)
+        end
     end)
 end
 
@@ -1354,26 +1556,28 @@ function CombatSystem.startLoop()
     if not _RunSvc then return end
     local conn = safeConnect(_RunSvc.Heartbeat, function()
         if Core.panicMode then return end
-        pcall(CombatSystem.updateReach)
+        if Config.get("reachEnabled") then pcall(CombatSystem.updateReach)
+        else pcall(CombatSystem.restoreReach) end
         pcall(CombatSystem.autoStab)
         pcall(CombatSystem.autoFling)
     end)
     table.insert(Core.connections, conn)
-    CleanupManager.register("CombatSystem", function() conn:Disconnect() end)
+    CleanupManager.register("CombatSystem", function()
+        conn:Disconnect()
+        CombatSystem.restoreReach()
+    end)
 end
 
 -- ============================================================
 -- FARM SYSTEM
 -- ============================================================
-local FarmSystem = { coinsThisSession=0, lastCollect=0 }
+local FarmSystem = {coinsThisSession=0, lastCollect=0}
 
--- Find coins/collectibles in workspace
 local function findCoins()
     local coins = {}
     if not _WS then return coins end
     for _, obj in ipairs(_WS:GetDescendants()) do
-        -- MM2 coins are usually tagged or named "Coin", "coin"
-        if obj.Name:lower():find("coin") and obj:IsA("BasePart") then
+        if obj:IsA("BasePart") and obj.Name:lower():find("coin") then
             table.insert(coins, obj)
         end
     end
@@ -1385,21 +1589,19 @@ function FarmSystem.autoCollect()
     local hrp = getHRP()
     if not hrp then return end
     local range = Config.get("autoCollectRange") or 20
-    local now = tick()
+    local now   = tick()
     if now - FarmSystem.lastCollect < 0.2 then return end
     FarmSystem.lastCollect = now
 
-    local coins = findCoins()
-    for _, coin in ipairs(coins) do
+    for _, coin in ipairs(findCoins()) do
         if coin and coin.Parent then
             local dist = (coin.Position - hrp.Position).Magnitude
             if dist <= range then
-                -- TP to coin to collect (or fire remote)
                 pcall(function()
                     local lp = getLocalPlayer()
-                    if lp and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-                        lp.Character.HumanoidRootPart.CFrame = coin.CFrame
-                    end
+                    local c  = lp and lp.Character
+                    local r  = c and c:FindFirstChild("HumanoidRootPart")
+                    if r then r.CFrame = CFrame.new(coin.Position) end
                 end)
                 FarmSystem.coinsThisSession = FarmSystem.coinsThisSession + 1
                 Statistics.coinsCollected   = Statistics.coinsCollected + 1
@@ -1415,7 +1617,6 @@ function FarmSystem.coinFarm()
     local coins = findCoins()
     if #coins == 0 then return end
 
-    -- Teleport to nearest coin
     local nearest, nearDist = nil, math.huge
     for _, coin in ipairs(coins) do
         if coin and coin.Parent then
@@ -1426,9 +1627,9 @@ function FarmSystem.coinFarm()
     if nearest then
         pcall(function()
             local lp = getLocalPlayer()
-            if lp and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-                lp.Character.HumanoidRootPart.CFrame = nearest.CFrame
-            end
+            local c  = lp and lp.Character
+            local r  = c and c:FindFirstChild("HumanoidRootPart")
+            if r then r.CFrame = CFrame.new(nearest.Position) end
         end)
     end
 end
@@ -1445,66 +1646,31 @@ function FarmSystem.startLoop()
 end
 
 -- ============================================================
--- INTELLIGENCE SYSTEM (MM2 Role Detection)
+-- INTELLIGENCE SYSTEM (Role Detection MM2)
 -- ============================================================
 local IntelSystem = {
-    roles        = {},  -- [playerName] = "Murderer" | "Sheriff" | "Innocent"
-    roundActive  = false,
-    aliveCount   = 0,
+    roles       = {},
+    roundActive = false,
+    aliveCount  = 0,
 }
-
-local function detectMM2Roles()
-    if not _Players then return end
-    local lp = getLocalPlayer()
-    for _, p in ipairs(_Players:GetPlayers()) do
-        if p ~= lp and p.Character then
-            local char    = p.Character
-            local hasKnife = false
-            local hasGun   = false
-            for _, tool in ipairs(char:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local n = tool.Name:lower()
-                    if n:find("knife") then hasKnife = true end
-                    if n:find("gun") or n:find("sheriff") then hasGun = true end
-                end
-            end
-            -- Also check tools in backpack (not equipped)
-            if p:FindFirstChild("Backpack") then
-                for _, tool in ipairs(p.Backpack:GetChildren()) do
-                    if tool:IsA("Tool") then
-                        local n = tool.Name:lower()
-                        if n:find("knife") then hasKnife = true end
-                        if n:find("gun") or n:find("sheriff") then hasGun = true end
-                    end
-                end
-            end
-
-            if hasKnife and not hasGun then
-                IntelSystem.roles[p.Name] = "Murderer"
-            elseif hasGun then
-                IntelSystem.roles[p.Name] = "Sheriff"
-            else
-                IntelSystem.roles[p.Name] = "Innocent"
-            end
-        end
-    end
-end
 
 function IntelSystem.startLoop()
     if not _RunSvc then return end
     local conn = safeConnect(_RunSvc.Heartbeat, function()
         if Core.panicMode then return end
-        if Config.get("espEnabled") then
-            pcall(detectMM2Roles)
+        if Config.get("espEnabled") and _Players then
+            local lp = getLocalPlayer()
+            for _, p in ipairs(_Players:GetPlayers()) do
+                if p ~= lp then
+                    IntelSystem.roles[p.Name] = getPlayerRole(p)
+                end
+            end
         end
-        -- Count alive players
         if _Players then
             local alive = 0
             for _, p in ipairs(_Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then
-                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if hum.Health > 0 then alive = alive + 1 end
-                end
+                local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then alive = alive + 1 end
             end
             IntelSystem.aliveCount = alive
         end
@@ -1514,40 +1680,19 @@ function IntelSystem.startLoop()
 end
 
 -- ============================================================
--- CROSSHAIR
+-- CROSSHAIR SYSTEM
 -- ============================================================
 local CrosshairSystem = {}
-local crosshairLines = {}
+local crosshairLines  = {}
 
 function CrosshairSystem.create()
     if not hasDrawing() then return end
-    if next(crosshairLines) then return end
-    local cam = getCamera()
-    local center = cam and (cam.ViewportSize / 2) or Vector2.new(960, 540)
-    local size = 8
-
+    if next(crosshairLines) then CrosshairSystem.cleanup() end
     crosshairLines.left  = newDrawing("Line", {Visible=false, Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=1})
     crosshairLines.right = newDrawing("Line", {Visible=false, Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=1})
     crosshairLines.up    = newDrawing("Line", {Visible=false, Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=1})
     crosshairLines.down  = newDrawing("Line", {Visible=false, Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=1})
-    -- center dot
     crosshairLines.dot   = newDrawing("Circle", {Visible=false, Color=Color3.fromRGB(255,255,255), Thickness=1, Filled=true, Radius=2, NumSides=8, Transparency=1})
-end
-
-function CrosshairSystem.update()
-    local cam    = getCamera()
-    local show   = Config.get("espEnabled") or false -- crosshair visible with esp or always
-    -- always show if visual_crosshair is enabled config
-    if not next(crosshairLines) then CrosshairSystem.create() end
-    local center = cam and (cam.ViewportSize / 2) or Vector2.new(960, 540)
-    local size   = 8
-    local gap    = 3
-
-    for _, line in pairs(crosshairLines) do
-        if line then pcall(function() line.Visible = false end) end
-    end
-
-    -- Only show if crosshair feature explicitly on via config key
 end
 
 function CrosshairSystem.setVisible(v)
@@ -1556,17 +1701,31 @@ function CrosshairSystem.setVisible(v)
     local center = cam and (cam.ViewportSize / 2) or Vector2.new(960, 540)
     local size   = 8
     local gap    = 3
-
-    if crosshairLines.left  then crosshairLines.left.Visible  = v; crosshairLines.left.From  = Vector2.new(center.X - size, center.Y); crosshairLines.left.To   = Vector2.new(center.X - gap, center.Y) end
-    if crosshairLines.right then crosshairLines.right.Visible = v; crosshairLines.right.From = Vector2.new(center.X + gap, center.Y); crosshairLines.right.To  = Vector2.new(center.X + size, center.Y) end
-    if crosshairLines.up    then crosshairLines.up.Visible    = v; crosshairLines.up.From    = Vector2.new(center.X, center.Y - size); crosshairLines.up.To     = Vector2.new(center.X, center.Y - gap) end
-    if crosshairLines.down  then crosshairLines.down.Visible  = v; crosshairLines.down.From  = Vector2.new(center.X, center.Y + gap);  crosshairLines.down.To   = Vector2.new(center.X, center.Y + size) end
+    if crosshairLines.left  then crosshairLines.left.Visible  = v; crosshairLines.left.From  = center + Vector2.new(-size, 0); crosshairLines.left.To   = center + Vector2.new(-gap, 0) end
+    if crosshairLines.right then crosshairLines.right.Visible = v; crosshairLines.right.From = center + Vector2.new(gap, 0);   crosshairLines.right.To  = center + Vector2.new(size, 0) end
+    if crosshairLines.up    then crosshairLines.up.Visible    = v; crosshairLines.up.From    = center + Vector2.new(0, -size); crosshairLines.up.To     = center + Vector2.new(0, -gap) end
+    if crosshairLines.down  then crosshairLines.down.Visible  = v; crosshairLines.down.From  = center + Vector2.new(0, gap);   crosshairLines.down.To   = center + Vector2.new(0, size) end
     if crosshairLines.dot   then crosshairLines.dot.Visible   = v; crosshairLines.dot.Position = center end
 end
 
 function CrosshairSystem.cleanup()
     for _, line in pairs(crosshairLines) do removeDrawing(line) end
     crosshairLines = {}
+end
+
+function CrosshairSystem.startLoop()
+    if not _RunSvc then return end
+    local conn = safeConnect(_RunSvc.RenderStepped, function()
+        if Core.panicMode then return end
+        local show = Config.get("crosshairEnabled") or false
+        if show and not next(crosshairLines) then CrosshairSystem.create() end
+        if next(crosshairLines) then pcall(CrosshairSystem.setVisible, show) end
+    end)
+    table.insert(Core.connections, conn)
+    CleanupManager.register("Crosshair", function()
+        conn:Disconnect()
+        CrosshairSystem.cleanup()
+    end)
 end
 
 -- ============================================================
@@ -1586,31 +1745,33 @@ function UI.init()
     local pg = getPlayerGui()
     if not pg then Logger.log("UI","No PlayerGui"); return false end
 
-    local existing = pg:FindFirstChild("KuraiSoftwareUI")
-    if existing then existing:Destroy() end
+    -- Destroy existing GUI if reloading
+    local existing = pg:FindFirstChild("KuraiSoftware")
+    if existing then pcall(function() existing:Destroy() end) end
 
     local gui = newInst("ScreenGui", pg, {
-        Name="KuraiSoftwareUI", ResetOnSpawn=false,
-        ZIndexBehavior=Enum.ZIndexBehavior.Sibling, DisplayOrder=999,
+        Name="KuraiSoftware", ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset=true,
     })
-    if not gui then Logger.log("UI","Failed to create ScreenGui"); return false end
+    if not gui then return false end
     UI.gui = gui
-    Logger.log("UI","ScreenGui created OK")
     return true
 end
 
 function UI.buildStartupScreen()
-    local theme   = ThemeManager.get()
+    if not UI.gui then return nil end
+    local theme = ThemeManager.get()
     local startup = newInst("Frame", UI.gui, {
         Name="StartupScreen", Size=UDim2.fromScale(1,1), Position=UDim2.fromScale(0,0),
-        BackgroundColor3=theme.bg, BorderSizePixel=0, ZIndex=100,
+        BackgroundColor3=theme.bg, BackgroundTransparency=0, ZIndex=100, BorderSizePixel=0,
     })
     UI.startupFrame = startup
+
+    -- Gradient bg
     newInst("UIGradient", startup, {
         Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(20,10,40)),
-            ColorSequenceKeypoint.new(0.5, theme.bg),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(8,4,20)),
+            ColorSequenceKeypoint.new(0, theme.bg),
+            ColorSequenceKeypoint.new(1, theme.bgSecondary),
         }), Rotation=135,
     })
 
@@ -1660,12 +1821,12 @@ function UI.buildStartupScreen()
     newInst("UICorner", progressFill, {CornerRadius=UDim.new(1,0)})
     newInst("UIGradient", progressFill, {
         Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0,theme.accent),
-            ColorSequenceKeypoint.new(1,Color3.fromRGB(200,160,255)),
+            ColorSequenceKeypoint.new(0, theme.accent),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(200,160,255)),
         })
     })
     newInst("TextLabel", startup, {
-        Text="v"..KURAI_VERSION, Font=Enum.Font.Gotham, TextSize=11,
+        Text="v" .. KURAI_VERSION, Font=Enum.Font.Gotham, TextSize=11,
         TextColor3=theme.textDim, BackgroundTransparency=1,
         Size=UDim2.new(0,60,0,18), Position=UDim2.new(1,-68,1,-26),
         TextXAlignment=Enum.TextXAlignment.Right, ZIndex=102,
@@ -1677,8 +1838,8 @@ function UI.buildStartupScreen()
         TextXAlignment=Enum.TextXAlignment.Left, ZIndex=102,
     })
 
-    return { glow=glow, logo=logo, subtitle=subtitle, discord=discord,
-             line=line, statusLbl=statusLbl, progressFill=progressFill }
+    return {glow=glow, logo=logo, subtitle=subtitle, discord=discord,
+            line=line, statusLbl=statusLbl, progressFill=progressFill}
 end
 
 function UI.playStartupAnimation(els, onComplete)
@@ -1695,15 +1856,15 @@ function UI.playStartupAnimation(els, onComplete)
 
     local function waitT(t)
         local s = tick()
-        while tick()-s < t*speed do
+        while tick() - s < t * speed do
             if skipped then return end
             task.wait(0.016)
         end
     end
 
     local function status(txt, pct)
-        if els.statusLbl then els.statusLbl.Text = txt end
-        if els.progressFill then safeTween(els.progressFill,"Size",UDim2.new(pct,0,1,0),0.3*speed) end
+        if els.statusLbl then pcall(function() els.statusLbl.Text = txt end) end
+        if els.progressFill then safeTween(els.progressFill, "Size", UDim2.new(pct,0,1,0), 0.3*speed) end
     end
 
     safeTween(els.glow,     "BackgroundTransparency", 0.84, 0.8*speed); waitT(0.25)
@@ -1720,7 +1881,7 @@ function UI.playStartupAnimation(els, onComplete)
         {"Loading interface...",     0.60},
         {"Checking environment...",  0.72},
         {"Loading configuration...", 0.88},
-        {"Ready.",                   1.0 },
+        {"Ready.",                   1.0},
     }
     for _, s in ipairs(steps) do
         if skipped then break end
@@ -1742,681 +1903,507 @@ function UI.playStartupAnimation(els, onComplete)
 end
 
 -- ============================================================
--- MOBILE TOGGLE BUTTON (drag + tap)
--- ============================================================
-function UI.buildMobileToggleButton()
-    local theme = ThemeManager.get()
-    -- Floating button to show/hide dashboard on mobile
-    local btn = newInst("TextButton", UI.gui, {
-        Name="KuraiToggleBtn",
-        Size=UDim2.fromOffset(50,50),
-        Position=UDim2.new(0,10,0.5,-25),
-        BackgroundColor3=theme.accent,
-        Text="K",
-        Font=Enum.Font.GothamBold,
-        TextSize=20,
-        TextColor3=Color3.fromRGB(255,255,255),
-        BorderSizePixel=0,
-        ZIndex=200,
-    })
-    newInst("UICorner", btn, {CornerRadius=UDim.new(1,0)})
-    newInst("UIStroke", btn, {Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=0.7})
-
-    -- Drag logic
-    local dragging = false
-    local dragStartPos
-    local btnStartPos
-    local moved = false
-
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging     = true
-            dragStartPos = input.Position
-            btnStartPos  = btn.Position
-            moved        = false
-        end
-    end)
-
-    btn.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-            local delta = input.Position - dragStartPos
-            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then moved = true end
-            local cam = getCamera()
-            local vpSize = cam and cam.ViewportSize or Vector2.new(1920,1080)
-            local newX = math.clamp(btnStartPos.X.Offset + delta.X, 0, vpSize.X - 55)
-            local newY = math.clamp(btnStartPos.Y.Scale * vpSize.Y + btnStartPos.Y.Offset + delta.Y, 0, vpSize.Y - 55)
-            btn.Position = UDim2.fromOffset(newX, newY)
-        end
-    end)
-
-    btn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if not moved then
-                UI.toggleVisibility()
-            end
-            dragging = false
-        end
-    end)
-
-    UI.toggleButton = btn
-end
-
--- ============================================================
--- DASHBOARD BUILDER
+-- UI DASHBOARD
 -- ============================================================
 function UI.buildDashboard()
-    local theme = ThemeManager.get()
+    if not UI.gui then return end
+    local theme  = ThemeManager.get()
+    local cam    = getCamera()
+    local vpSize = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+    local W, H   = 720, 480
 
-    local shadow = newInst("ImageLabel", UI.gui, {
-        Name="Shadow", Size=UDim2.new(0.9,0,0.87,0), Position=UDim2.new(0.05,0,0.075,8),
-        BackgroundTransparency=1, Image="rbxassetid://7912134082",
-        ImageColor3=Color3.fromRGB(0,0,0), ImageTransparency=0.6, ZIndex=9, Visible=false,
+    -- Shadow
+    UI.shadowFrame = newInst("Frame", UI.gui, {
+        Name="KuraiShadow",
+        Size=UDim2.fromOffset(W+20, H+20),
+        Position=UDim2.new(0.5, -(W+20)/2, 0.5, -(H+20)/2),
+        BackgroundColor3=Color3.fromRGB(0,0,0),
+        BackgroundTransparency=0.5, BorderSizePixel=0, ZIndex=1,
     })
-    UI.shadowFrame = shadow
+    newInst("UICorner", UI.shadowFrame, {CornerRadius=UDim.new(0,16)})
 
-    local dash = newInst("Frame", UI.gui, {
-        Name="Dashboard", Size=UDim2.new(0.88,0,0.85,0), Position=UDim2.new(0.06,0,0.075,0),
-        BackgroundColor3=theme.bg, BorderSizePixel=0, BackgroundTransparency=0.02,
-        Visible=false, ZIndex=10,
+    -- Main frame
+    local main = newInst("Frame", UI.gui, {
+        Name="KuraiDashboard",
+        Size=UDim2.fromOffset(W, H),
+        Position=UDim2.new(0.5, -W/2, 0.5, -H/2),
+        BackgroundColor3=theme.bg, BackgroundTransparency=0.02,
+        BorderSizePixel=0, ZIndex=2,
     })
-    newInst("UICorner", dash, {CornerRadius=UDim.new(0,14)})
-    newInst("UIStroke", dash, {Color=theme.border, Thickness=1, Transparency=0.5})
-    UI.dashboardFrame = dash
+    newInst("UICorner", main, {CornerRadius=UDim.new(0,12)})
+    newInst("UIStroke", main, {Color=theme.border, Thickness=1, Transparency=0.5})
+    UI.dashboardFrame = main
 
-    -- gradient bg
-    newInst("UIGradient", dash, {
-        Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(16,14,26)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(10,8,18)),
-        }), Rotation=135,
+    -- Titlebar
+    local titlebar = newInst("Frame", main, {
+        Name="Titlebar",
+        Size=UDim2.new(1,0,0,40),
+        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0, BorderSizePixel=0, ZIndex=3,
     })
-
-    -- Header bar
-    local header = newInst("Frame", dash, {
-        Name="Header", Size=UDim2.new(1,0,0,44), BackgroundColor3=theme.bgSecondary,
-        BorderSizePixel=0, ZIndex=11,
-    })
-    newInst("UICorner", header, {CornerRadius=UDim.new(0,14)})
-    newInst("Frame", header, {
+    newInst("UICorner", titlebar, {CornerRadius=UDim.new(0,12)})
+    -- Fix corner bottom de la titlebar
+    newInst("Frame", titlebar, {
         Size=UDim2.new(1,0,0.5,0), Position=UDim2.new(0,0,0.5,0),
-        BackgroundColor3=theme.bgSecondary, BorderSizePixel=0, ZIndex=11,
+        BackgroundColor3=theme.bgSecondary, BorderSizePixel=0, ZIndex=3,
     })
 
-    -- Logo in header
-    newInst("TextLabel", header, {
-        Text="KURAI  SOFTWARE", Font=Enum.Font.GothamBold, TextSize=16,
-        TextColor3=theme.text, BackgroundTransparency=1,
-        Size=UDim2.new(0,200,1,0), Position=UDim2.new(0,14,0,0),
-        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
-    })
-    -- Version badge
-    newInst("TextLabel", header, {
-        Text="v"..KURAI_VERSION, Font=Enum.Font.Gotham, TextSize=10,
+    newInst("TextLabel", titlebar, {
+        Text="KURAI  SOFTWARE",
+        Font=Enum.Font.GothamBold, TextSize=15,
         TextColor3=theme.accent, BackgroundTransparency=1,
-        Size=UDim2.new(0,60,0,20), Position=UDim2.new(0,160,0,12),
-        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
+        Size=UDim2.new(0,200,1,0), Position=UDim2.new(0,14,0,0),
+        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=4,
     })
-    -- Close button
-    local closeBtn = newInst("TextButton", header, {
-        Text="✕", Font=Enum.Font.GothamBold, TextSize=14,
+    newInst("TextLabel", titlebar, {
+        Text="v"..KURAI_VERSION,
+        Font=Enum.Font.Gotham, TextSize=11,
         TextColor3=theme.textDim, BackgroundTransparency=1,
-        Size=UDim2.fromOffset(36,36), Position=UDim2.new(1,-38,0,4),
-        ZIndex=12,
+        Size=UDim2.new(0,80,1,0), Position=UDim2.new(0,160,0,0),
+        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=4,
     })
-    closeBtn.MouseButton1Click:Connect(function() UI.hide() end)
+
+    -- Close / minimize buttons
+    local function makeWinBtn(color, xOff, onClick)
+        local b = newInst("TextButton", titlebar, {
+            Size=UDim2.fromOffset(12,12), Position=UDim2.new(1,xOff,0.5,-6),
+            BackgroundColor3=color, BorderSizePixel=0, Text="", ZIndex=5,
+        })
+        newInst("UICorner", b, {CornerRadius=UDim.new(1,0)})
+        if b and onClick then b.MouseButton1Click:Connect(onClick) end
+        return b
+    end
+    makeWinBtn(Color3.fromRGB(255,90,90),  -20, function() UI.hide() end)
+    makeWinBtn(Color3.fromRGB(255,190,60), -38, function() UI.hide() end)
+
+    -- Dragging
+    local dragging, dragStart, frameStart = false, nil, nil
+    titlebar.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging   = true
+            dragStart  = inp.Position
+            frameStart = main.Position
+        end
+    end)
+    titlebar.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    safeConnect(_UIS and _UIS.InputChanged, function(inp)
+        if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = inp.Position - dragStart
+            main.Position = UDim2.new(
+                frameStart.X.Scale, frameStart.X.Offset + delta.X,
+                frameStart.Y.Scale, frameStart.Y.Offset + delta.Y
+            )
+        end
+    end)
 
     -- Sidebar
-    local sidebar = newInst("Frame", dash, {
-        Name="Sidebar", Size=UDim2.new(0,130,1,-44), Position=UDim2.new(0,0,0,44),
-        BackgroundColor3=theme.bgSecondary, BorderSizePixel=0, ZIndex=11,
+    local sidebar = newInst("Frame", main, {
+        Name="Sidebar",
+        Size=UDim2.new(0,140,1,-40), Position=UDim2.new(0,0,0,40),
+        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.2, BorderSizePixel=0, ZIndex=3,
     })
-    newInst("UICorner", sidebar, {CornerRadius=UDim.new(0,12)})
-    newInst("Frame", sidebar, {
-        Size=UDim2.new(0.6,0,1,0), Position=UDim2.new(0.4,0,0,0),
-        BackgroundColor3=theme.bgSecondary, BorderSizePixel=0, ZIndex=11,
-    })
+    newInst("UIListLayout", sidebar, {Padding=UDim.new(0,4), SortOrder=Enum.SortOrder.LayoutOrder})
+    newInst("UIPadding", sidebar, {PaddingTop=UDim.new(0,8), PaddingLeft=UDim.new(0,8), PaddingRight=UDim.new(0,8)})
     UI.sidebarFrame = sidebar
 
-    local sideList = newInst("UIListLayout", sidebar, {
-        FillDirection=Enum.FillDirection.Vertical, HorizontalAlignment=Enum.HorizontalAlignment.Center,
-        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2),
+    -- Content
+    local content = newInst("ScrollingFrame", main, {
+        Name="Content",
+        Size=UDim2.new(1,-140,1,-40), Position=UDim2.new(0,140,0,40),
+        BackgroundColor3=theme.bg, BackgroundTransparency=0.05, BorderSizePixel=0,
+        ScrollBarThickness=4, ScrollBarImageColor3=theme.accent,
+        CanvasSize=UDim2.new(0,0,0,0), ZIndex=3,
     })
-    newInst("UIPadding", sidebar, {PaddingTop=UDim.new(0,8), PaddingBottom=UDim.new(0,8)})
-
-    -- Content area
-    local contentBg = newInst("Frame", dash, {
-        Name="ContentBg", Size=UDim2.new(1,-138,1,-52), Position=UDim2.new(0,134,0,48),
-        BackgroundTransparency=1, BorderSizePixel=0, ZIndex=11,
-    })
-    local content = newInst("ScrollingFrame", contentBg, {
-        Name="Content", Size=UDim2.fromScale(1,1),
-        BackgroundTransparency=1, BorderSizePixel=0,
-        ScrollBarThickness=3, ScrollBarImageColor3=theme.accent,
-        ScrollingDirection=Enum.ScrollingDirection.Y,
-        CanvasSize=UDim2.new(0,0,0,0), ZIndex=11,
-    })
-    newInst("UIListLayout", content, {
-        FillDirection=Enum.FillDirection.Vertical, HorizontalAlignment=Enum.HorizontalAlignment.Left,
-        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,6),
-    })
-    newInst("UIPadding", content, {PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),PaddingTop=UDim.new(0,8),PaddingBottom=UDim.new(0,8)})
+    newInst("UIListLayout", content, {Padding=UDim.new(0,6), SortOrder=Enum.SortOrder.LayoutOrder})
+    newInst("UIPadding", content, {PaddingTop=UDim.new(0,10), PaddingLeft=UDim.new(0,12), PaddingRight=UDim.new(0,12)})
     UI.contentFrame = content
 
-    -- Tabs definition
-    local tabs = {
-        {"Dashboard", "🏠"},
-        {"ESP",       "👁"},
-        {"Combat",    "⚔"},
-        {"Movement",  "🏃"},
-        {"Farm",      "💰"},
-        {"Intel",     "🔍"},
-        {"Visual",    "🎨"},
-        {"Settings",  "⚙"},
-        {"Stats",     "📊"},
-        {"Compat",    "✔"},
-        {"Logs",      "📋"},
-    }
-
-    local tabButtons = {}
-    for i, tab in ipairs(tabs) do
+    -- Sidebar tabs
+    local tabs = {"Dashboard","ESP","Combat","Movement","Farm","Intel","Visual","Config","Stats","Logs"}
+    for i, tabName in ipairs(tabs) do
         local btn = newInst("TextButton", sidebar, {
-            Name=tab[1].."Tab", Text=tab[2].." "..tab[1], Font=Enum.Font.GothamMedium,
-            TextSize=11, TextColor3=theme.textDim, BackgroundTransparency=1,
-            Size=UDim2.new(1,-8,0,30), BorderSizePixel=0, ZIndex=12,
-            TextXAlignment=Enum.TextXAlignment.Left, LayoutOrder=i,
+            Name="Tab_"..tabName, Text=tabName,
+            Font=Enum.Font.GothamMedium, TextSize=13,
+            TextColor3=(tabName == UI.activeTab and theme.accent or theme.textDim),
+            BackgroundColor3=(tabName == UI.activeTab and theme.bgTertiary or Color3.fromRGB(0,0,0)),
+            BackgroundTransparency=(tabName == UI.activeTab and 0 or 1),
+            Size=UDim2.new(1,0,0,32), BorderSizePixel=0,
+            TextXAlignment=Enum.TextXAlignment.Left, ZIndex=4,
+            LayoutOrder=i,
         })
-        newInst("UIPadding", btn, {PaddingLeft=UDim.new(0,10)})
-        tabButtons[tab[1]] = btn
-
-        btn.MouseButton1Click:Connect(function()
-            UI.activeTab = tab[1]
-            for _, b in pairs(tabButtons) do
-                pcall(function() b.TextColor3 = theme.textDim; b.BackgroundTransparency = 1 end)
-            end
-            btn.TextColor3 = theme.accent
-            btn.BackgroundColor3 = theme.bgTertiary
-            btn.BackgroundTransparency = 0
-            UI.populateTab(tab[1])
-        end)
-    end
-
-    UI.tabButtons = tabButtons
-    UI.populateTab("Dashboard")
-    tabButtons["Dashboard"].TextColor3 = theme.accent
-    tabButtons["Dashboard"].BackgroundColor3 = theme.bgTertiary
-    tabButtons["Dashboard"].BackgroundTransparency = 0
-end
-
--- ============================================================
--- TAB CONTENT BUILDER
--- ============================================================
-local function clearContent()
-    if not UI.contentFrame then return end
-    for _, child in ipairs(UI.contentFrame:GetChildren()) do
-        if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-            child:Destroy()
+        if btn then
+            newInst("UIPadding", btn, {PaddingLeft=UDim.new(0,10)})
+            newInst("UICorner", btn, {CornerRadius=UDim.new(0,6)})
+            btn.MouseButton1Click:Connect(function()
+                UI.activeTab = tabName
+                -- Update all tab button colors
+                for _, ch in ipairs(sidebar:GetChildren()) do
+                    if ch:IsA("TextButton") then
+                        local active = ch.Name == "Tab_"..tabName
+                        ch.TextColor3          = active and theme.accent or theme.textDim
+                        ch.BackgroundColor3    = active and theme.bgTertiary or Color3.fromRGB(0,0,0)
+                        ch.BackgroundTransparency = active and 0 or 1
+                    end
+                end
+                UI.populateTab(tabName)
+            end)
         end
     end
-    UI.contentFrame.CanvasSize = UDim2.new(0,0,0,0)
+
+    UI.populateTab(UI.activeTab)
 end
 
-local function header(text)
+-- UI Helpers
+local function makeToggle(parent, label, configKey, order)
     local theme = ThemeManager.get()
-    newInst("TextLabel", UI.contentFrame, {
-        Text=text, Font=Enum.Font.GothamBold, TextSize=16,
-        TextColor3=theme.text, BackgroundTransparency=1,
-        Size=UDim2.new(1,0,0,28), TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
-    })
-end
-
-local function secHead(text)
-    local theme = ThemeManager.get()
-    newInst("TextLabel", UI.contentFrame, {
-        Text=text, Font=Enum.Font.GothamMedium, TextSize=11,
-        TextColor3=theme.accent, BackgroundTransparency=1,
-        Size=UDim2.new(1,0,0,20), TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
-    })
-end
-
-local function divider()
-    local theme = ThemeManager.get()
-    local div = newInst("Frame", UI.contentFrame, {
-        BackgroundColor3=theme.border, BorderSizePixel=0,
-        Size=UDim2.new(1,0,0,1), BackgroundTransparency=0.6, ZIndex=12,
-    })
-end
-
--- Toggle row: key = config key, label = display name
-local function makeToggle(parent, key, label, onChange)
-    local theme = ThemeManager.get()
-    local row   = newInst("Frame", parent, {
-        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-        Size=UDim2.new(1,0,0,36), BorderSizePixel=0, ZIndex=12,
+    local row = newInst("Frame", parent, {
+        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.3,
+        Size=UDim2.new(1,0,0,38), BorderSizePixel=0, ZIndex=5, LayoutOrder=order or 0,
     })
     newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-
     newInst("TextLabel", row, {
-        Text=label, Font=Enum.Font.Gotham, TextSize=12,
+        Text=label, Font=Enum.Font.GothamMedium, TextSize=13,
         TextColor3=theme.text, BackgroundTransparency=1,
-        Size=UDim2.new(0.7,0,1,0), Position=UDim2.new(0,10,0,0),
-        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
+        Size=UDim2.new(0.75,0,1,0), Position=UDim2.new(0,12,0,0),
+        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
     })
 
     local togBg = newInst("Frame", row, {
-        Size=UDim2.fromOffset(36,18), Position=UDim2.new(1,-46,0.5,-9),
-        BackgroundColor3=Config.get(key) and theme.success or theme.border,
-        BorderSizePixel=0, ZIndex=13,
+        Size=UDim2.fromOffset(40,22), Position=UDim2.new(1,-52,0.5,-11),
+        BackgroundColor3=Config.get(configKey) and Color3.fromRGB(120,80,255) or theme.border,
+        BorderSizePixel=0, ZIndex=6,
     })
     newInst("UICorner", togBg, {CornerRadius=UDim.new(1,0)})
-
-    local knob = newInst("Frame", togBg, {
-        Size=UDim2.fromOffset(14,14), Position=UDim2.new(Config.get(key) and 1 or 0, Config.get(key) and -16 or 2, 0.5, -7),
-        BackgroundColor3=Color3.fromRGB(255,255,255), BorderSizePixel=0, ZIndex=14,
+    local togKnob = newInst("Frame", togBg, {
+        Size=UDim2.fromOffset(16,16), Position=Config.get(configKey) and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8),
+        BackgroundColor3=Color3.fromRGB(255,255,255), BorderSizePixel=0, ZIndex=7,
     })
-    newInst("UICorner", knob, {CornerRadius=UDim.new(1,0)})
+    newInst("UICorner", togKnob, {CornerRadius=UDim.new(1,0)})
 
-    local togBtn = newInst("TextButton", row, {
-        Text="", BackgroundTransparency=1,
-        Size=UDim2.fromScale(1,1), ZIndex=15,
+    local togBtn = newInst("TextButton", togBg, {
+        Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", ZIndex=8,
     })
-    togBtn.MouseButton1Click:Connect(function()
-        local newVal = not Config.get(key)
-        Config.set(key, newVal)
-        togBg.BackgroundColor3 = newVal and theme.success or theme.border
-        safeTween(knob, "Position", UDim2.new(newVal and 1 or 0, newVal and -16 or 2, 0.5, -7), 0.15)
-        if onChange then pcall(onChange, newVal) end
-    end)
+    if togBtn then
+        togBtn.MouseButton1Click:Connect(function()
+            local v = not Config.get(configKey)
+            Config.set(configKey, v)
+            safeTween(togBg, "BackgroundColor3", v and Color3.fromRGB(120,80,255) or theme.border, 0.18)
+            safeTween(togKnob, "Position", v and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8), 0.18)
+        end)
+    end
     return row
 end
 
--- Slider row: key = config key
-local function makeSlider(parent, key, label, minV, maxV, step)
+local function makeSlider(parent, label, configKey, min, max, order)
     local theme = ThemeManager.get()
-    step = step or 1
     local row = newInst("Frame", parent, {
-        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-        Size=UDim2.new(1,0,0,50), BorderSizePixel=0, ZIndex=12,
+        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.3,
+        Size=UDim2.new(1,0,0,52), BorderSizePixel=0, ZIndex=5, LayoutOrder=order or 0,
     })
     newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-
-    local valLabel = newInst("TextLabel", row, {
-        Text=label..": "..tostring(Config.get(key)), Font=Enum.Font.Gotham, TextSize=12,
+    local val = Config.get(configKey) or min
+    local lbl = newInst("TextLabel", row, {
+        Text=label.." : "..tostring(val), Font=Enum.Font.GothamMedium, TextSize=12,
         TextColor3=theme.text, BackgroundTransparency=1,
-        Size=UDim2.new(1,-10,0,22), Position=UDim2.new(0,10,0,4),
-        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
+        Size=UDim2.new(1,-12,0,26), Position=UDim2.new(0,12,0,0),
+        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
     })
-
     local trackBg = newInst("Frame", row, {
-        Size=UDim2.new(1,-20,0,6), Position=UDim2.new(0,10,0,30),
-        BackgroundColor3=theme.border, BorderSizePixel=0, ZIndex=13,
+        Size=UDim2.new(1,-24,0,6), Position=UDim2.new(0,12,0,30),
+        BackgroundColor3=theme.border, BorderSizePixel=0, ZIndex=6,
     })
     newInst("UICorner", trackBg, {CornerRadius=UDim.new(1,0)})
-
-    local function valToX(v) return math.clamp((v - minV)/(maxV - minV), 0, 1) end
-    local fillRatio = valToX(Config.get(key) or minV)
-
-    local trackFill = newInst("Frame", trackBg, {
-        Size=UDim2.new(fillRatio,0,1,0), BackgroundColor3=theme.accent,
-        BorderSizePixel=0, ZIndex=14,
+    local ratio = math.clamp((val-min)/(math.max(max-min,1)), 0, 1)
+    local fill = newInst("Frame", trackBg, {
+        Size=UDim2.new(ratio,0,1,0), BackgroundColor3=Color3.fromRGB(120,80,255),
+        BorderSizePixel=0, ZIndex=7,
     })
-    newInst("UICorner", trackFill, {CornerRadius=UDim.new(1,0)})
+    newInst("UICorner", fill, {CornerRadius=UDim.new(1,0)})
 
-    local knob = newInst("Frame", trackBg, {
-        Size=UDim2.fromOffset(12,12), Position=UDim2.new(fillRatio,  -6, 0.5, -6),
-        BackgroundColor3=Color3.fromRGB(255,255,255), BorderSizePixel=0, ZIndex=15,
+    local draggingSlider = false
+    local sliderBtn = newInst("TextButton", trackBg, {
+        Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", ZIndex=9,
     })
-    newInst("UICorner", knob, {CornerRadius=UDim.new(1,0)})
-
-    -- drag
-    local dragging = false
-    local function update(x)
-        local absX = trackBg.AbsolutePosition.X
-        local absW = trackBg.AbsoluteSize.X
-        local ratio = math.clamp((x - absX)/absW, 0, 1)
-        local rawVal = minV + ratio*(maxV-minV)
-        local snapped = math.floor(rawVal/step + 0.5)*step
-        snapped = math.clamp(snapped, minV, maxV)
-        Config.set(key, snapped)
-        local r2 = valToX(snapped)
-        trackFill.Size    = UDim2.new(r2,0,1,0)
-        knob.Position     = UDim2.new(r2,-6,0.5,-6)
-        valLabel.Text     = label..": "..tostring(snapped)
+    local function updateSlider(x)
+        local abs    = trackBg.AbsolutePosition.X
+        local width  = trackBg.AbsoluteSize.X
+        local t      = math.clamp((x - abs) / width, 0, 1)
+        local newVal = math.floor(min + t * (max - min))
+        Config.set(configKey, newVal)
+        fill.Size = UDim2.new(t, 0, 1, 0)
+        if lbl then lbl.Text = label.." : "..tostring(newVal) end
     end
-
-    local inputConn1 = safeConnect(knob.InputBegan, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-        end
-    end)
-    local inputConn2 = safeConnect(_UIS and _UIS.InputChanged, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            update(input.Position.X)
-        end
-    end)
-    local inputConn3 = safeConnect(_UIS and _UIS.InputEnded, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
+    if sliderBtn then
+        sliderBtn.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+                draggingSlider = true
+                updateSlider(inp.Position.X)
+            end
+        end)
+        sliderBtn.InputEnded:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+                draggingSlider = false
+            end
+        end)
+        safeConnect(_UIS and _UIS.InputChanged, function(inp)
+            if draggingSlider and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+                updateSlider(inp.Position.X)
+            end
+        end)
+    end
     return row
 end
 
--- Button row
-local function makeButton(parent, label, onClick)
+local function makeButton(parent, label, onClick, order)
     local theme = ThemeManager.get()
     local btn = newInst("TextButton", parent, {
-        Text=label, Font=Enum.Font.GothamMedium, TextSize=12,
-        TextColor3=theme.text, BackgroundColor3=theme.bgTertiary,
-        BorderSizePixel=0, Size=UDim2.new(1,0,0,34), ZIndex=12,
+        Text=label, Font=Enum.Font.GothamBold, TextSize=13,
+        TextColor3=Color3.fromRGB(255,255,255),
+        BackgroundColor3=theme.accent, BorderSizePixel=0,
+        Size=UDim2.new(1,0,0,36), ZIndex=5, LayoutOrder=order or 0,
     })
     newInst("UICorner", btn, {CornerRadius=UDim.new(0,8)})
-    newInst("UIStroke", btn, {Color=theme.border, Thickness=1, Transparency=0.5})
-    btn.MouseButton1Click:Connect(function() if onClick then pcall(onClick) end end)
+    if btn and onClick then
+        btn.MouseButton1Click:Connect(function()
+            pcall(onClick)
+            safeTween(btn,"BackgroundColor3",Color3.fromRGB(80,50,180),0.1)
+            task.delay(0.15, function() safeTween(btn,"BackgroundColor3",theme.accent,0.15) end)
+        end)
+    end
     return btn
 end
 
--- Theme selector buttons
-local function makeThemeButtons(parent)
-    local theme  = ThemeManager.get()
-    local themes = {"Dark","Midnight","Neon","Glass","AMOLED"}
-    local row    = newInst("Frame", parent, {
-        BackgroundTransparency=1, Size=UDim2.new(1,0,0,34), ZIndex=12,
+local function makeSectionLabel(parent, txt, order)
+    local theme = ThemeManager.get()
+    local lbl = newInst("TextLabel", parent, {
+        Text=txt, Font=Enum.Font.GothamBold, TextSize=12,
+        TextColor3=theme.accent, BackgroundTransparency=1,
+        Size=UDim2.new(1,0,0,22), ZIndex=5, LayoutOrder=order or 0,
+        TextXAlignment=Enum.TextXAlignment.Left,
     })
-    newInst("UIListLayout", row, {
-        FillDirection=Enum.FillDirection.Horizontal, Padding=UDim.new(0,4),
-        SortOrder=Enum.SortOrder.LayoutOrder,
-    })
-    for i, t in ipairs(themes) do
-        local th  = ThemeManager.themes[t]
-        local btn = newInst("TextButton", row, {
-            Text=t, Font=Enum.Font.Gotham, TextSize=10,
-            TextColor3=Color3.fromRGB(255,255,255),
-            BackgroundColor3=th.accent, BorderSizePixel=0,
-            Size=UDim2.new(0, 64, 1, 0), LayoutOrder=i, ZIndex=13,
-        })
-        newInst("UICorner", btn, {CornerRadius=UDim.new(0,6)})
-        btn.MouseButton1Click:Connect(function()
-            ThemeManager.set(t)
-            NotificationManager.send("Theme","Changed to "..t,"INFO",2)
-        end)
+    newInst("UIPadding", lbl, {PaddingLeft=UDim.new(0,4)})
+    return lbl
+end
+
+function UI.clearContent()
+    if not UI.contentFrame then return end
+    for _, ch in ipairs(UI.contentFrame:GetChildren()) do
+        if not ch:IsA("UIListLayout") and not ch:IsA("UIPadding") then
+            pcall(function() ch:Destroy() end)
+        end
     end
-    return row
 end
 
 function UI.populateTab(tabName)
-    clearContent()
-    local theme = ThemeManager.get()
+    UI.clearContent()
+    local cf = UI.contentFrame
+    if not cf then return end
+    local o = 0
+    local function ord() o = o + 1; return o end
 
     if tabName == "Dashboard" then
-        header("Dashboard")
-        secHead("Welcome to Kurai Software v"..KURAI_VERSION)
-        divider()
-        secHead("Quick Status")
-        local function statRow(label, val, col)
-            local row = newInst("Frame", UI.contentFrame, {
+        local theme = ThemeManager.get()
+        local lp    = getLocalPlayer()
+        local infos = {
+            {"Player",   lp and lp.DisplayName or "N/A"},
+            {"Executor", Platform.executor},
+            {"Platform", Platform.os},
+            {"Drawing",  tostring(hasDrawing())},
+            {"Version",  KURAI_VERSION},
+            {"FPS",      tostring(Performance.fps)},
+            {"Uptime",   string.format("%.0fs", os.clock()-Core.sessionStart)},
+            {"Active",   tostring(#vim_table_keys(Core.activeFeatures))},
+        }
+        -- helper
+        local function countKeys(t) local n=0; for _ in pairs(t) do n=n+1 end; return n end
+        infos[8][2] = tostring(countKeys(Core.activeFeatures))
+
+        makeSectionLabel(cf, "◈  SYSTEM INFO", ord())
+        for _, row in ipairs(infos) do
+            local f = newInst("Frame", cf, {
                 BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-                Size=UDim2.new(1,0,0,34), BorderSizePixel=0, ZIndex=12,
+                Size=UDim2.new(1,0,0,30), BorderSizePixel=0, ZIndex=5, LayoutOrder=ord(),
             })
-            newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-            newInst("TextLabel", row, {
-                Text=label, Font=Enum.Font.Gotham, TextSize=12,
+            newInst("UICorner", f, {CornerRadius=UDim.new(0,6)})
+            newInst("TextLabel", f, {
+                Text=row[1], Font=Enum.Font.GothamMedium, TextSize=12,
                 TextColor3=theme.textDim, BackgroundTransparency=1,
-                Size=UDim2.new(0.5,0,1,0), Position=UDim2.new(0,10,0,0),
-                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
+                Size=UDim2.new(0.45,0,1,0), Position=UDim2.new(0,10,0,0),
+                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
             })
-            newInst("TextLabel", row, {
-                Text=val, Font=Enum.Font.GothamBold, TextSize=13,
-                TextColor3=col or theme.success, BackgroundTransparency=1,
-                Size=UDim2.new(0.4,0,1,0), Position=UDim2.new(0.57,0,0,0),
-                TextXAlignment=Enum.TextXAlignment.Right, ZIndex=13,
+            newInst("TextLabel", f, {
+                Text=row[2], Font=Enum.Font.GothamBold, TextSize=12,
+                TextColor3=theme.text, BackgroundTransparency=1,
+                Size=UDim2.new(0.5,0,1,0), Position=UDim2.new(0.47,0,0,0),
+                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
             })
         end
-
-        statRow("Executor", Platform.executor, theme.accent)
-        statRow("Platform", Platform.os, theme.accent)
-        statRow("Drawing API", hasDrawing() and "Available" or "Unavailable", hasDrawing() and theme.success or theme.danger)
-        statRow("Features Active", tostring(#(function() local n=0; for _ in pairs(Core.activeFeatures) do n=n+1 end return {} end)()).."0", theme.info)
-        statRow("FPS", tostring(Performance.fps), theme.success)
-        statRow("Session", string.format("%dm %ds", math.floor((os.clock()-Core.sessionStart)/60), math.floor(os.clock()-Core.sessionStart)%60), theme.info)
-
-        divider()
-        secHead("Quick Actions")
-        makeButton(UI.contentFrame, "🚨 Panic — Disable All", function() PanicButton.activate() end)
-        makeButton(UI.contentFrame, "🔄 Reload Config", function() Config.load() end)
+        makeSectionLabel(cf, "◈  QUICK ACTIONS", ord())
+        makeButton(cf, "Panic (End)", function() PanicButton.activate() end, ord())
+        makeButton(cf, "Reset Config", function() Config.reset(); NotificationManager.send("Config","Reset","INFO",2) end, ord())
+        makeButton(cf, "Reload UI", function()
+            pcall(UI.buildDashboard)
+            NotificationManager.send("UI","Reloaded","INFO",2)
+        end, ord())
 
     elseif tabName == "ESP" then
-        header("ESP")
-        secHead("Master Toggle")
-        makeToggle(UI.contentFrame, "espEnabled", "ESP Master Enable", function(v)
-            if not v then
-                Config.set("espBoxEnabled", false)
-                Config.set("espNameEnabled", false)
-                Config.set("espDistEnabled", false)
-                Config.set("espHealthEnabled", false)
-                Config.set("espTracerEnabled", false)
-                Config.set("espChamsEnabled", false)
-                Config.set("espRainbowEnabled", false)
-            end
-        end)
-        divider()
-        secHead("ESP Options")
-        makeToggle(UI.contentFrame, "espBoxEnabled",    "Box ESP")
-        makeToggle(UI.contentFrame, "espNameEnabled",   "Name ESP")
-        makeToggle(UI.contentFrame, "espDistEnabled",   "Distance ESP")
-        makeToggle(UI.contentFrame, "espHealthEnabled", "Health Bar ESP")
-        makeToggle(UI.contentFrame, "espTracerEnabled", "Tracer ESP")
-        makeToggle(UI.contentFrame, "espChamsEnabled",  "Chams (SelectionBox)")
-        makeToggle(UI.contentFrame, "espRainbowEnabled","Rainbow ESP")
-        divider()
-        secHead("ESP Settings")
-        makeSlider(UI.contentFrame, "espRange",     "ESP Range",     50,  1000, 10)
-        makeSlider(UI.contentFrame, "espThickness", "ESP Thickness",  1,   5,   1)
+        makeSectionLabel(cf, "◈  ESP SETTINGS", ord())
+        makeToggle(cf, "ESP Enabled",    "espEnabled",       ord())
+        makeToggle(cf, "Box ESP",        "espBoxEnabled",    ord())
+        makeToggle(cf, "Name ESP",       "espNameEnabled",   ord())
+        makeToggle(cf, "Distance ESP",   "espDistEnabled",   ord())
+        makeToggle(cf, "Health Bar",     "espHealthEnabled", ord())
+        makeToggle(cf, "Tracer",         "espTracerEnabled", ord())
+        makeToggle(cf, "Skeleton ESP",   "espSkeletonEnabled", ord())
+        makeToggle(cf, "Chams",          "espChamsEnabled",  ord())
+        makeToggle(cf, "Rainbow Mode",   "espRainbowEnabled",ord())
+        makeToggle(cf, "Team Check",     "espTeamCheck",     ord())
+        makeSectionLabel(cf, "◈  ESP OPTIONS", ord())
+        makeSlider(cf, "ESP Range", "espRange", 50, 2000, ord())
+        makeSlider(cf, "Line Thickness", "espThickness", 1, 5, ord())
 
     elseif tabName == "Combat" then
-        header("Combat")
-        secHead("Aimbot")
-        makeToggle(UI.contentFrame, "aimbotEnabled",  "Aimbot (RMB to aim)")
-        makeToggle(UI.contentFrame, "camLockEnabled",  "Camera Lock")
-        makeToggle(UI.contentFrame, "silentAimEnabled","Silent Aim", function(v)
-            if v then AimSystem.enableSilentAim() else AimSystem.disableSilentAim() end
-        end)
-        makeSlider(UI.contentFrame, "aimFOV",       "Aim FOV",       10,  400, 5)
-        makeSlider(UI.contentFrame, "aimSmoothing", "Aim Smoothing",  0,  0.99, 0.01)
-        divider()
-        secHead("Combat Tools")
-        makeToggle(UI.contentFrame, "autoStabEnabled",  "Auto Stab")
-        makeToggle(UI.contentFrame, "autoFlingEnabled", "Auto Fling")
-        makeToggle(UI.contentFrame, "hitboxEnabled",    "Hitbox Expander")
-        makeSlider(UI.contentFrame, "hitboxSize",       "Hitbox Size", 2,  30, 1)
-        makeToggle(UI.contentFrame, "reachEnabled",     "Reach")
-        makeSlider(UI.contentFrame, "reachDistance",    "Reach Distance", 5, 60, 1)
+        makeSectionLabel(cf, "◈  AIM", ord())
+        makeToggle(cf, "Aimbot",      "aimbotEnabled",    ord())
+        makeToggle(cf, "Silent Aim",  "silentAimEnabled", ord())
+        makeToggle(cf, "Cam Lock",    "camLockEnabled",   ord())
+        makeSlider(cf, "FOV Radius (px)", "aimFOV",     30, 500, ord())
+        makeSlider(cf, "Smoothing %",     "aimSmoothing", 0, 100, ord())
+        makeSectionLabel(cf, "◈  COMBAT", ord())
+        makeToggle(cf, "Auto Stab",       "autoStabEnabled",  ord())
+        makeToggle(cf, "Hitbox Expander", "hitboxEnabled",    ord())
+        makeSlider(cf, "Hitbox Size",     "hitboxSize",  2, 50, ord())
+        makeToggle(cf, "Reach",           "reachEnabled",     ord())
+        makeSlider(cf, "Reach Distance",  "reachDistance", 5, 80, ord())
+        makeToggle(cf, "Auto Fling",      "autoFlingEnabled", ord())
 
     elseif tabName == "Movement" then
-        header("Movement")
-        makeToggle(UI.contentFrame, "speedEnabled", "Speed Hack")
-        makeSlider(UI.contentFrame, "walkSpeed",    "Walk Speed",  4, 200, 1)
-        makeSlider(UI.contentFrame, "jumpPower",    "Jump Power",  0, 300, 5)
-        divider()
-        makeToggle(UI.contentFrame, "infJumpEnabled",   "Infinite Jump")
-        makeToggle(UI.contentFrame, "flyEnabled",       "Fly", function(v)
-            if v then MovementSystem.startFly() else MovementSystem.stopFly() end
-        end)
-        makeSlider(UI.contentFrame, "flySpeed",         "Fly Speed", 5, 300, 5)
-        makeToggle(UI.contentFrame, "noclipEnabled",    "Noclip", function(v)
-            if v then MovementSystem.startNoclip() else MovementSystem.stopNoclip() end
-        end)
-        makeToggle(UI.contentFrame, "bunnyHopEnabled",  "Bunny Hop")
-        divider()
-        makeToggle(UI.contentFrame, "gravityEnabled",   "Custom Gravity")
-        makeSlider(UI.contentFrame, "gravityValue",     "Gravity Value", 0, 500, 5)
+        makeSectionLabel(cf, "◈  MOVEMENT", ord())
+        makeToggle(cf, "Speed",       "speedEnabled",   ord())
+        makeSlider(cf, "Walk Speed",  "walkSpeed",  16, 300, ord())
+        makeSlider(cf, "Jump Power",  "jumpPower",  50, 300, ord())
+        makeToggle(cf, "Fly",         "flyEnabled",     ord())
+        makeSlider(cf, "Fly Speed",   "flySpeed",   10, 300, ord())
+        makeToggle(cf, "Noclip",      "noclipEnabled",  ord())
+        makeToggle(cf, "Inf Jump",    "infJumpEnabled", ord())
+        makeToggle(cf, "Bunny Hop",   "bunnyHopEnabled",ord())
+        makeToggle(cf, "Gravity Mod", "gravityEnabled", ord())
+        makeSlider(cf, "Gravity",     "gravityValue", 0, 400, ord())
 
     elseif tabName == "Farm" then
-        header("Farm")
-        makeToggle(UI.contentFrame, "autoCollectEnabled", "Auto Collect Coins")
-        makeSlider(UI.contentFrame, "autoCollectRange",   "Collect Range", 5, 100, 5)
-        makeToggle(UI.contentFrame, "coinFarmEnabled",    "Coin Farm (TP to nearest coin)")
-        divider()
-        secHead("Farm Stats")
-        local row = newInst("Frame", UI.contentFrame, {
-            BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-            Size=UDim2.new(1,0,0,34), BorderSizePixel=0, ZIndex=12,
-        })
-        newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-        newInst("TextLabel", row, {
-            Text="Coins this session: "..tostring(FarmSystem.coinsThisSession),
-            Font=Enum.Font.Gotham, TextSize=12, TextColor3=theme.success,
-            BackgroundTransparency=1, Size=UDim2.new(1,-20,1,0), Position=UDim2.new(0,10,0,0),
-            TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
-        })
+        makeSectionLabel(cf, "◈  FARM", ord())
+        makeToggle(cf, "Auto Collect", "autoCollectEnabled", ord())
+        makeSlider(cf, "Collect Range","autoCollectRange",  5, 100, ord())
+        makeToggle(cf, "Coin Farm (TP)","coinFarmEnabled",  ord())
 
     elseif tabName == "Intel" then
-        header("Intelligence")
-        makeToggle(UI.contentFrame, "espEnabled", "Role Detection (requires ESP)")
-        divider()
-        secHead("Detected Roles")
-        if next(IntelSystem.roles) then
-            for name, role in pairs(IntelSystem.roles) do
-                local col = role == "Murderer" and theme.danger or (role == "Sheriff" and theme.info or theme.textDim)
-                local row = newInst("Frame", UI.contentFrame, {
-                    BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.5,
-                    Size=UDim2.new(1,0,0,28), BorderSizePixel=0, ZIndex=12,
-                })
-                newInst("UICorner", row, {CornerRadius=UDim.new(0,6)})
-                newInst("TextLabel", row, {
-                    Text=name.." — "..role, Font=Enum.Font.Gotham, TextSize=11,
-                    TextColor3=col, BackgroundTransparency=1,
-                    Size=UDim2.new(1,-20,1,0), Position=UDim2.new(0,10,0,0),
-                    TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
-                })
+        makeSectionLabel(cf, "◈  INTELLIGENCE", ord())
+        local theme = ThemeManager.get()
+        local lp    = getLocalPlayer()
+        if _Players then
+            for _, p in ipairs(_Players:GetPlayers()) do
+                if p ~= lp then
+                    local role  = IntelSystem.roles[p.Name] or getPlayerRole(p)
+                    local color = role == "Murderer" and theme.danger
+                              or role == "Sheriff"  and theme.info
+                              or theme.textDim
+                    local row = newInst("Frame", cf, {
+                        BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
+                        Size=UDim2.new(1,0,0,30), BorderSizePixel=0, ZIndex=5, LayoutOrder=ord(),
+                    })
+                    newInst("UICorner", row, {CornerRadius=UDim.new(0,6)})
+                    newInst("TextLabel", row, {
+                        Text=p.DisplayName or p.Name, Font=Enum.Font.GothamMedium, TextSize=12,
+                        TextColor3=theme.text, BackgroundTransparency=1,
+                        Size=UDim2.new(0.6,0,1,0), Position=UDim2.new(0,10,0,0),
+                        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
+                    })
+                    newInst("TextLabel", row, {
+                        Text=role, Font=Enum.Font.GothamBold, TextSize=12,
+                        TextColor3=color, BackgroundTransparency=1,
+                        Size=UDim2.new(0.4,0,1,0), Position=UDim2.new(0.6,0,0,0),
+                        TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
+                    })
+                end
             end
-        else
-            newInst("TextLabel", UI.contentFrame, {
-                Text="No roles detected yet. Roles appear after round starts.", Font=Enum.Font.Gotham, TextSize=11,
-                TextColor3=theme.textDim, BackgroundTransparency=1,
-                Size=UDim2.new(1,0,0,24), TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
-            })
         end
+        makeButton(cf, "Refresh", function() UI.populateTab("Intel") end, ord())
 
     elseif tabName == "Visual" then
-        header("Visual")
-        makeToggle(UI.contentFrame, "espEnabled", "Crosshair", function(v)
-            CrosshairSystem.setVisible(v)
-        end)
-        divider()
-        secHead("Theme")
-        makeThemeButtons(UI.contentFrame)
+        makeSectionLabel(cf, "◈  VISUAL", ord())
+        makeToggle(cf, "Crosshair", "crosshairEnabled", ord())
+        makeSectionLabel(cf, "◈  THEME", ord())
+        for _, tname in ipairs({"Dark","Midnight","Neon","Glass","AMOLED"}) do
+            makeButton(cf, "Theme: "..tname, function()
+                ThemeManager.set(tname)
+                pcall(UI.buildDashboard)
+            end, ord())
+        end
 
-    elseif tabName == "Settings" then
-        header("Settings")
-        secHead("Performance")
-        makeToggle(UI.contentFrame, "performanceMode", "Performance Mode")
-        makeToggle(UI.contentFrame, "debugMode", "Debug Mode", function(v)
-            Core.debugMode = v
-        end)
-        divider()
-        secHead("Animation")
-        makeToggle(UI.contentFrame, "startupAnimation", "Startup Animation")
-        makeSlider(UI.contentFrame, "animationSpeed",   "Animation Speed", 0.1, 5, 0.1)
-        divider()
-        secHead("Config")
-        makeButton(UI.contentFrame, "💾 Save Config", function() Config.save(); NotificationManager.send("Config","Saved","INFO",2) end)
-        makeButton(UI.contentFrame, "🔄 Load Config", function() Config.load(); NotificationManager.send("Config","Loaded","INFO",2) end)
-        makeButton(UI.contentFrame, "🗑️ Reset Config",  function() Config.reset(); NotificationManager.send("Config","Reset to defaults","INFO",2) end)
-        divider()
-        secHead("Keybinds")
-        newInst("TextLabel", UI.contentFrame, {
-            Text="RightCtrl — Toggle Dashboard\nEnd — Panic Button",
-            Font=Enum.Font.Gotham, TextSize=11, TextColor3=theme.textDim,
-            BackgroundTransparency=1, Size=UDim2.new(1,0,0,36),
-            TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12, TextWrapped=true,
-        })
+    elseif tabName == "Config" then
+        makeSectionLabel(cf, "◈  CONFIGURATION", ord())
+        makeToggle(cf, "Startup Animation", "startupAnimation", ord())
+        makeSlider(cf, "Anim Speed %", "animationSpeed", 1, 10, ord())
+        makeToggle(cf, "Performance Mode", "performanceMode", ord())
+        makeToggle(cf, "Debug Mode", "debugMode", ord())
+        makeSectionLabel(cf, "◈  ACTIONS", ord())
+        makeButton(cf, "Save Config",  function() Config.save();  NotificationManager.send("Config","Saved","INFO",2) end, ord())
+        makeButton(cf, "Reset Config", function() Config.reset(); NotificationManager.send("Config","Reset","INFO",2) end, ord())
 
     elseif tabName == "Stats" then
-        header("Statistics")
-        local function sRow(label, val)
-            local row = newInst("Frame", UI.contentFrame, {
-                BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-                Size=UDim2.new(1,0,0,34), BorderSizePixel=0, ZIndex=12,
-            })
-            newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-            newInst("TextLabel", row, {
-                Text=label, Font=Enum.Font.Gotham, TextSize=12,
-                TextColor3=theme.textDim, BackgroundTransparency=1,
-                Size=UDim2.new(0.6,0,1,0), Position=UDim2.new(0,10,0,0),
-                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
-            })
-            newInst("TextLabel", row, {
-                Text=tostring(val), Font=Enum.Font.GothamBold, TextSize=13,
-                TextColor3=theme.success, BackgroundTransparency=1,
-                Size=UDim2.new(0.35,0,1,0), Position=UDim2.new(0.62,0,0,0),
-                TextXAlignment=Enum.TextXAlignment.Right, ZIndex=13,
-            })
-        end
-        sRow("FPS",          Performance.fps)
-        sRow("Session Time", string.format("%dm %ds", math.floor((os.clock()-Core.sessionStart)/60), math.floor(os.clock()-Core.sessionStart)%60))
-        sRow("Executor",     Platform.executor)
-        sRow("Total Kills",  Statistics.totalKills)
-        sRow("Total Deaths", Statistics.totalDeaths)
-        sRow("K/D Ratio",    Statistics.getKD())
-        sRow("Coins Farmed", Statistics.coinsCollected)
-        sRow("Rounds Played",Statistics.roundsPlayed)
-        makeButton(UI.contentFrame, "Reset Statistics", function() Statistics.reset() UI.populateTab("Stats") end)
-
-    elseif tabName == "Compat" then
-        header("Compatibility")
-        secHead("Detected Environment")
-        newInst("TextLabel", UI.contentFrame, {
-            Text="Platform: "..Platform.os.."  |  Executor: "..Platform.executor,
-            Font=Enum.Font.Gotham, TextSize=12, TextColor3=theme.textDim,
-            BackgroundTransparency=1, Size=UDim2.new(1,0,0,24),
-            TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
-        })
-        divider()
-        secHead("Capabilities")
-        local caps = {
-            {"UI System",   Platform.capabilities.ui},
-            {"Drawing API", Platform.capabilities.drawing},
-            {"Filesystem",  Platform.capabilities.filesystem},
-            {"Network",     Platform.capabilities.network},
-            {"Input",       Platform.capabilities.input},
-            {"Movement",    true},
-            {"Combat",      true},
-            {"Config",      true},
+        makeSectionLabel(cf, "◈  SESSION STATS", ord())
+        local theme = ThemeManager.get()
+        local stats = {
+            {"FPS",      tostring(Performance.fps)},
+            {"Session",  string.format("%.0fs", os.clock()-Core.sessionStart)},
+            {"Kills",    tostring(Statistics.totalKills)},
+            {"Deaths",   tostring(Statistics.totalDeaths)},
+            {"K/D",      tostring(Statistics.getKD())},
+            {"Coins",    tostring(Statistics.coinsCollected)},
+            {"Players",  _Players and tostring(#_Players:GetPlayers()) or "0"},
+            {"Alive",    tostring(IntelSystem.aliveCount)},
+            {"Executor", Platform.executor},
+            {"Drawing",  tostring(hasDrawing())},
         }
-        for _, c in ipairs(caps) do
-            local row = newInst("Frame", UI.contentFrame, {
+        for _, row in ipairs(stats) do
+            local f = newInst("Frame", cf, {
                 BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.4,
-                Size=UDim2.new(1,0,0,32), BorderSizePixel=0, ZIndex=12,
+                Size=UDim2.new(1,0,0,28), BorderSizePixel=0, ZIndex=5, LayoutOrder=ord(),
             })
-            newInst("UICorner", row, {CornerRadius=UDim.new(0,8)})
-            newInst("TextLabel", row, {
-                Text=c[1], Font=Enum.Font.Gotham, TextSize=12, TextColor3=theme.text,
-                BackgroundTransparency=1, Size=UDim2.new(0.6,0,1,0), Position=UDim2.new(0,10,0,0),
-                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=13,
+            newInst("UICorner", f, {CornerRadius=UDim.new(0,6)})
+            newInst("TextLabel", f, {
+                Text=row[1], Font=Enum.Font.GothamMedium, TextSize=12,
+                TextColor3=theme.textDim, BackgroundTransparency=1,
+                Size=UDim2.new(0.5,0,1,0), Position=UDim2.new(0,10,0,0),
+                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
             })
-            newInst("TextLabel", row, {
-                Text=c[2] and "SUPPORTED" or "UNAVAILABLE", Font=Enum.Font.GothamBold, TextSize=11,
-                TextColor3=c[2] and theme.success or theme.danger, BackgroundTransparency=1,
-                Size=UDim2.new(0.35,0,1,0), Position=UDim2.new(0.62,0,0,0),
-                TextXAlignment=Enum.TextXAlignment.Right, ZIndex=13,
+            newInst("TextLabel", f, {
+                Text=row[2], Font=Enum.Font.GothamBold, TextSize=12,
+                TextColor3=theme.text, BackgroundTransparency=1,
+                Size=UDim2.new(0.5,0,1,0), Position=UDim2.new(0.5,0,0,0),
+                TextXAlignment=Enum.TextXAlignment.Left, ZIndex=6,
             })
         end
+        makeButton(cf, "Reset Stats", function() Statistics.reset(); UI.populateTab("Stats") end, ord())
 
     elseif tabName == "Logs" then
-        header("Logs")
-        local logs = Core.logs
+        makeSectionLabel(cf, "◈  LOGS", ord())
+        local theme = ThemeManager.get()
+        local logs  = Core.logs
         if #logs == 0 then
-            newInst("TextLabel", UI.contentFrame, {
-                Text="No log entries yet.", Font=Enum.Font.Gotham, TextSize=12,
+            newInst("TextLabel", cf, {
+                Text="No logs yet.", Font=Enum.Font.Gotham, TextSize=12,
                 TextColor3=theme.textDim, BackgroundTransparency=1,
-                Size=UDim2.new(1,0,0,28), TextXAlignment=Enum.TextXAlignment.Left, ZIndex=12,
+                Size=UDim2.new(1,0,0,28), ZIndex=5, LayoutOrder=ord(),
+                TextXAlignment=Enum.TextXAlignment.Left,
             })
         else
             for i = #logs, math.max(#logs-80, 0)+1, -1 do
                 local e   = logs[i]
-                local row = newInst("Frame", UI.contentFrame, {
+                local row = newInst("Frame", cf, {
                     BackgroundColor3=theme.bgSecondary, BackgroundTransparency=0.5,
-                    Size=UDim2.new(1,0,0,26), BorderSizePixel=0, ZIndex=12,
+                    Size=UDim2.new(1,0,0,26), BorderSizePixel=0, ZIndex=5, LayoutOrder=ord(),
                 })
                 newInst("UICorner", row, {CornerRadius=UDim.new(0,5)})
                 local col = theme.textDim
@@ -2426,20 +2413,21 @@ function UI.populateTab(tabName)
                     Text=string.format("[%.1fs][%s] %s", e.timestamp, e.category, e.message),
                     Font=Enum.Font.Code, TextSize=10, TextColor3=col,
                     BackgroundTransparency=1, Size=UDim2.new(1,-16,1,0),
-                    Position=UDim2.new(0,8,0,0), TextXAlignment=Enum.TextXAlignment.Left,
-                    TextTruncate=Enum.TextTruncate.AtEnd, ZIndex=13,
+                    Position=UDim2.new(0,8,0,0),
+                    TextXAlignment=Enum.TextXAlignment.Left,
+                    TextTruncate=Enum.TextTruncate.AtEnd, ZIndex=6,
                 })
             end
         end
-        makeButton(UI.contentFrame, "Clear Logs", function() Core.logs = {}; UI.populateTab("Logs") end)
+        makeButton(cf, "Clear Logs", function() Core.logs={}; UI.populateTab("Logs") end, ord())
     end
 
-    -- auto-resize canvas
+    -- Auto-resize canvas
     task.wait()
     pcall(function()
         local layout = UI.contentFrame:FindFirstChildOfClass("UIListLayout")
         if layout then
-            UI.contentFrame.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 20)
+            UI.contentFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
         end
     end)
 end
@@ -2449,12 +2437,12 @@ function UI.show()
     UI.dashboardFrame.Visible = true
     if UI.shadowFrame then UI.shadowFrame.Visible = true end
     UI.dashboardFrame.BackgroundTransparency = 1
-    safeTween(UI.dashboardFrame,"BackgroundTransparency",0.02,0.35)
+    safeTween(UI.dashboardFrame, "BackgroundTransparency", 0.02, 0.35)
     UI.isVisible = true
 end
 function UI.hide()
     if not UI.dashboardFrame then return end
-    safeTween(UI.dashboardFrame,"BackgroundTransparency",1,0.3)
+    safeTween(UI.dashboardFrame, "BackgroundTransparency", 1, 0.3)
     task.delay(0.35, function()
         if UI.dashboardFrame then UI.dashboardFrame.Visible = false end
         if UI.shadowFrame     then UI.shadowFrame.Visible = false end
@@ -2463,6 +2451,53 @@ function UI.hide()
 end
 function UI.toggleVisibility()
     if UI.isVisible then UI.hide() else UI.show() end
+end
+
+-- Mobile button
+function UI.buildMobileToggleButton()
+    if not UI.gui then return end
+    local theme = ThemeManager.get()
+    local btn = newInst("TextButton", UI.gui, {
+        Name="KuraiToggleBtn",
+        Size=UDim2.fromOffset(50,50), Position=UDim2.new(0,10,0.5,-25),
+        BackgroundColor3=theme.accent, Text="K",
+        Font=Enum.Font.GothamBold, TextSize=20,
+        TextColor3=Color3.fromRGB(255,255,255), BorderSizePixel=0, ZIndex=200,
+    })
+    newInst("UICorner", btn, {CornerRadius=UDim.new(1,0)})
+    newInst("UIStroke", btn, {Color=Color3.fromRGB(255,255,255), Thickness=1, Transparency=0.7})
+
+    local dragging, dragStart, btnStart, moved = false, nil, nil, false
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; dragStart = input.Position; btnStart = btn.Position; moved = false
+        end
+    end)
+    btn.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then moved = true end
+            local cam    = getCamera()
+            local vpSize = cam and cam.ViewportSize or Vector2.new(1920,1080)
+            local newX   = math.clamp(btnStart.X.Offset + delta.X, 0, vpSize.X - 55)
+            local newY   = math.clamp(btnStart.Y.Scale * vpSize.Y + btnStart.Y.Offset + delta.Y, 0, vpSize.Y - 55)
+            btn.Position = UDim2.fromOffset(newX, newY)
+        end
+    end)
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if not moved then UI.toggleVisibility() end
+            dragging = false
+        end
+    end)
+    UI.toggleButton = btn
+end
+
+-- Helper manquant dans le Dashboard tab
+local function vim_table_keys(t)
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
 end
 
 -- ============================================================
@@ -2480,7 +2515,7 @@ local function setupToggleKeybind()
 end
 
 -- ============================================================
--- STATS REFRESH (live update every 2s while on Stats tab)
+-- STATS REFRESH (live 2s)
 -- ============================================================
 local function startStatsRefresh()
     if not _RunSvc then return end
@@ -2493,7 +2528,6 @@ local function startStatsRefresh()
             if UI.activeTab == "Stats" or UI.activeTab == "Dashboard" then
                 pcall(function() UI.populateTab(UI.activeTab) end)
             end
-            -- Refresh server info
             pcall(ServerInfo.refresh)
         end
     end)
@@ -2512,13 +2546,15 @@ function KuraiSoftware.init()
     pcall(registerAllFeatures)
     pcall(Performance.start)
 
+    -- Sync silent aim state si déjà configuré
+    if Config.get("silentAimEnabled") then
+        Config.set("silentAimEnabled", false) -- reset proprement au boot
+    end
+
     local uiReady = false
     pcall(function() uiReady = UI.init() end)
 
-    if not uiReady then
-        Logger.log("Boot","Headless mode — no UI")
-        Core.initialized = true
-        -- still start game loops
+    local function startAllLoops()
         pcall(ESP.startLoop)
         pcall(Chams.startLoop)
         pcall(AimSystem.startLoop)
@@ -2527,10 +2563,16 @@ function KuraiSoftware.init()
         pcall(CombatSystem.startLoop)
         pcall(FarmSystem.startLoop)
         pcall(IntelSystem.startLoop)
+        pcall(CrosshairSystem.startLoop)
+    end
+
+    if not uiReady then
+        Logger.log("Boot","Headless mode — no UI")
+        Core.initialized = true
+        startAllLoops()
         return
     end
 
-    -- Build startup or skip
     if not Config.get("startupAnimation") then
         pcall(UI.buildDashboard)
         pcall(UI.buildMobileToggleButton)
@@ -2538,17 +2580,7 @@ function KuraiSoftware.init()
         KeybindManager.init()
         setupToggleKeybind()
         startStatsRefresh()
-
-        -- start game loops
-        pcall(ESP.startLoop)
-        pcall(Chams.startLoop)
-        pcall(AimSystem.startLoop)
-        pcall(MovementSystem.startLoop)
-        pcall(HitboxSystem.startLoop)
-        pcall(CombatSystem.startLoop)
-        pcall(FarmSystem.startLoop)
-        pcall(IntelSystem.startLoop)
-
+        startAllLoops()
         Core.initialized = true
         Logger.log("Boot","Ready (no animation)")
         return
@@ -2561,6 +2593,7 @@ function KuraiSoftware.init()
         pcall(UI.buildDashboard)
         pcall(UI.buildMobileToggleButton)
         UI.show()
+        startAllLoops()
         Core.initialized = true
         return
     end
@@ -2574,19 +2607,9 @@ function KuraiSoftware.init()
                 KeybindManager.init()
                 setupToggleKeybind()
                 startStatsRefresh()
-
-                -- start all game loops AFTER ui is ready
-                pcall(ESP.startLoop)
-                pcall(Chams.startLoop)
-                pcall(AimSystem.startLoop)
-                pcall(MovementSystem.startLoop)
-                pcall(HitboxSystem.startLoop)
-                pcall(CombatSystem.startLoop)
-                pcall(FarmSystem.startLoop)
-                pcall(IntelSystem.startLoop)
-
+                startAllLoops()
                 Core.initialized = true
-                Logger.log("Boot","Kurai v2.0 ready.")
+                Logger.log("Boot","Kurai v2.1.0 ready.")
                 NotificationManager.send("Kurai","Ready — RightCtrl to toggle","INFO",4)
             end)
         end)
@@ -2595,30 +2618,34 @@ function KuraiSoftware.init()
             pcall(UI.buildDashboard)
             pcall(UI.buildMobileToggleButton)
             UI.show()
+            startAllLoops()
             Core.initialized = true
         end
     end)
 end
 
--- Export
-KuraiSoftware.Core              = Core
-KuraiSoftware.Platform          = Platform
-KuraiSoftware.Config            = Config
-KuraiSoftware.Logger            = Logger
-KuraiSoftware.FeatureManager    = FeatureManager
-KuraiSoftware.KeybindManager    = KeybindManager
+-- Exports
+KuraiSoftware.Core               = Core
+KuraiSoftware.Platform           = Platform
+KuraiSoftware.Config             = Config
+KuraiSoftware.Logger             = Logger
+KuraiSoftware.FeatureManager     = FeatureManager
+KuraiSoftware.KeybindManager     = KeybindManager
 KuraiSoftware.NotificationManager = NotificationManager
-KuraiSoftware.Performance       = Performance
-KuraiSoftware.Statistics        = Statistics
-KuraiSoftware.ThemeManager      = ThemeManager
-KuraiSoftware.TargetManager     = TargetManager
-KuraiSoftware.PanicButton       = PanicButton
-KuraiSoftware.ESP               = ESP
-KuraiSoftware.AimSystem         = AimSystem
-KuraiSoftware.MovementSystem    = MovementSystem
-KuraiSoftware.FarmSystem        = FarmSystem
-KuraiSoftware.IntelSystem       = IntelSystem
-KuraiSoftware.UI                = UI
+KuraiSoftware.Performance        = Performance
+KuraiSoftware.Statistics         = Statistics
+KuraiSoftware.ThemeManager       = ThemeManager
+KuraiSoftware.TargetManager      = TargetManager
+KuraiSoftware.PanicButton        = PanicButton
+KuraiSoftware.ESP                = ESP
+KuraiSoftware.AimSystem          = AimSystem
+KuraiSoftware.MovementSystem     = MovementSystem
+KuraiSoftware.FarmSystem         = FarmSystem
+KuraiSoftware.IntelSystem        = IntelSystem
+KuraiSoftware.CombatSystem       = CombatSystem
+KuraiSoftware.HitboxSystem       = HitboxSystem
+KuraiSoftware.CrosshairSystem    = CrosshairSystem
+KuraiSoftware.UI                 = UI
 
 KuraiSoftware.init()
 return KuraiSoftware
