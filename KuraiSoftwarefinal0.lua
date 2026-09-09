@@ -503,7 +503,7 @@ CloseBtn.MouseEnter:Connect(function() Tween(CloseBtn, {BackgroundColor3=T.Accen
 CloseBtn.MouseLeave:Connect(function() Tween(CloseBtn, {BackgroundColor3=T.Accent}) end)
 CloseBtn.MouseButton1Click:Connect(function()
     Tween(Win, {Size=UDim2.new(0,620,0,0)})
-    task.delay(0.2, function() Win.Visible = false Win.Size = UDim2.new(0,620,0,440) end)
+    task.delay(0.2, function() Win.Visible = false; Win.Size = UDim2.new(0,620,0,440) end)
     S.MenuOpen = false
 end)
 
@@ -1809,8 +1809,8 @@ local function EnableFly()
     local root = GetRoot()
     if not root then return end
     DisableFly = function()
-        if flyBV then flyBV:Destroy() flyBV = nil end
-        if flyBG then flyBG:Destroy() flyBG = nil end
+        if flyBV then flyBV:Destroy(); flyBV = nil end
+        if flyBG then flyBG:Destroy(); flyBG = nil end
     end
     flyBV = Instance.new("BodyVelocity")
     flyBV.Velocity  = Vector3.new(0,0,0)
@@ -1840,8 +1840,8 @@ RunService.Heartbeat:Connect(function()
         flyBG.CFrame   = cf
     else
         if flyBV then
-            flyBV:Destroy() flyBV = nil
-            flyBG:Destroy() flyBG = nil
+            flyBV:Destroy(); flyBV = nil
+            flyBG:Destroy(); flyBG = nil
         end
     end
 end)
@@ -1885,7 +1885,7 @@ RunService.Heartbeat:Connect(function()
     for _, obj in ipairs(WS:GetDescendants()) do
         if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or obj.Name:lower():find("gold")) then
             local d = GetDist(root.Position, obj.Position)
-            if d < nDist then nearest = obj nDist = d end
+            if d < nDist then nearest = obj; nDist = d end
         end
     end
     if nearest then
