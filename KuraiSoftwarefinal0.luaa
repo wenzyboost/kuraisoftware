@@ -1752,8 +1752,8 @@ do
                 username  = "KuraiSoftware",
                 content   = "✅ Test depuis **KuraiSoftware v3.0** — joueur: **"..LP.Name.."**",
             })
-            syn and syn.request and syn.request({Url=S.WebhookURL,Method="POST",Headers={["Content-Type"]="application/json"},Body=payload})
-            or request and request({Url=S.WebhookURL,Method="POST",Headers={["Content-Type"]="application/json"},Body=payload})
+            local r = (syn and syn.request) or request
+            if r then r({Url=S.WebhookURL,Method="POST",Headers={["Content-Type"]="application/json"},Body=payload}) end
         end)
         Notify("Webhook","Envoyé ✓")
     end)
