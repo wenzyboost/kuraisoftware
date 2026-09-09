@@ -311,7 +311,6 @@ local MainFrame = Create("Frame", {
     ClipsDescendants = true,
 })
 
-Create("UICorner", {CornerRadius = UDim.new(0, 10)}, {}):clone = nil
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
