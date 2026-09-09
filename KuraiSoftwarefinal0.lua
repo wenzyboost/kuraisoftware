@@ -2090,7 +2090,7 @@ RunService.RenderStepped:Connect(function()
             CH.Left.From   = Vector2.new(cx-(cg+cs),cy); CH.Left.To   = Vector2.new(cx-cg,cy)
             CH.Right.From  = Vector2.new(cx+cg,cy);      CH.Right.To  = Vector2.new(cx+cg+cs,cy)
             for _, ln in pairs({CH.Top,CH.Bottom,CH.Left,CH.Right}) do
-                ln.Visible=true ln.Color=cc ln.Thickness=ct
+                ln.Visible=true; ln.Color=cc; ln.Thickness=ct
             end
 
         elseif S.CrosshairStyle == "KillCross" then
@@ -2098,7 +2098,7 @@ RunService.RenderStepped:Connect(function()
             CH.Top.From    = Vector2.new(cx-s, cy-s); CH.Top.To    = Vector2.new(cx+s, cy+s)
             CH.Bottom.From = Vector2.new(cx+s, cy-s); CH.Bottom.To = Vector2.new(cx-s, cy+s)
             for _, ln in pairs({CH.Top,CH.Bottom}) do
-                ln.Visible=true ln.Color=cc ln.Thickness=ct
+                ln.Visible=true; ln.Color=cc; ln.Thickness=ct
             end
         end
     end
