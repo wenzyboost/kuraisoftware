@@ -1,0 +1,2166 @@
+--[[
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    KuraiMoka v1.0 — Murder Mystery 2                        ║
+║              Architecture basée sur Mono MM2 — Refonte complète             ║
+║                        discord.gg/kuraishop                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+    Basé sur l'architecture Mono MM2 par fleece — entièrement refait.
+    Nom : KuraiMoka
+    Améliorations : UI premium sombre, nouveaux modules, meilleure détection des rôles,
+    système de notifications amélioré, cleanup plus robuste.
+]]
+
+-- ══════════════════════════════════════════════════════════
+--  SERVICES
+-- ══════════════════════════════════════════════════════════
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local Lighting         = game:GetService("Lighting")
+local TeleportService  = game:GetService("TeleportService")
+local HttpService      = game:GetService("HttpService")
+local RS               = game:GetService("ReplicatedStorage")
+local CollectionService= game:GetService("CollectionService")
+local GuiService       = game:GetService("GuiService")
+local TextService      = game:GetService("TextService")
+local Debris           = game:GetService("Debris")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera      = workspace.CurrentCamera
+
+-- ══════════════════════════════════════════════════════════
+--  GUARD : MM2 SEULEMENT
+-- ══════════════════════════════════════════════════════════
+local MM2_UNIVERSE = 66654135
+if game.GameId ~= MM2_UNIVERSE then
+    -- Popup d'erreur propre
+    local mount = game:GetService("CoreGui")
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "KuraiMokaWrongGame"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder = 999
+    pcall(function() sg.Parent = mount end)
+    if not sg.Parent then sg.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    local shade = Instance.new("Frame")
+    shade.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    shade.BackgroundTransparency = 1
+    shade.Size = UDim2.fromScale(1,1)
+    shade.BorderSizePixel = 0
+    shade.Parent = sg
+
+    local card = Instance.new("Frame")
+    card.AnchorPoint = Vector2.new(0.5,0.5)
+    card.Position = UDim2.fromScale(0.5,0.5)
+    card.Size = UDim2.fromOffset(360,140)
+    card.BackgroundColor3 = Color3.fromRGB(14,14,20)
+    card.BackgroundTransparency = 1
+    card.BorderSizePixel = 0
+    card.Parent = sg
+    local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0,14); cc.Parent = card
+    local cs = Instance.new("UIStroke"); cs.Color = Color3.fromRGB(190,28,48); cs.Thickness = 1.5
+    cs.Transparency = 1; cs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; cs.Parent = card
+
+    local tl = Instance.new("TextLabel")
+    tl.BackgroundTransparency = 1
+    tl.Position = UDim2.fromOffset(22,22)
+    tl.Size = UDim2.fromOffset(316,24)
+    tl.Font = Enum.Font.GothamBold
+    tl.Text = "KuraiMoka — Mauvais jeu"
+    tl.TextColor3 = Color3.fromRGB(255,255,255)
+    tl.TextTransparency = 1
+    tl.TextSize = 17
+    tl.TextXAlignment = Enum.TextXAlignment.Left
+    tl.Parent = card
+
+    local bl = Instance.new("TextLabel")
+    bl.BackgroundTransparency = 1
+    bl.Position = UDim2.fromOffset(22,52)
+    bl.Size = UDim2.fromOffset(316,42)
+    bl.Font = Enum.Font.Gotham
+    bl.Text = "KuraiMoka fonctionne uniquement dans Murder Mystery 2.\nRejoins un serveur MM2 et relance le script."
+    bl.TextColor3 = Color3.fromRGB(150,150,165)
+    bl.TextTransparency = 1
+    bl.TextSize = 13
+    bl.TextXAlignment = Enum.TextXAlignment.Left
+    bl.TextWrapped = true
+    bl.Parent = card
+
+    local okBtn = Instance.new("TextButton")
+    okBtn.AnchorPoint = Vector2.new(1,1)
+    okBtn.Position = UDim2.new(1,-22,1,-18)
+    okBtn.Size = UDim2.fromOffset(80,30)
+    okBtn.BackgroundColor3 = Color3.fromRGB(190,28,48)
+    okBtn.BackgroundTransparency = 1
+    okBtn.BorderSizePixel = 0
+    okBtn.Font = Enum.Font.GothamBold
+    okBtn.Text = "OK"
+    okBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    okBtn.TextTransparency = 1
+    okBtn.TextSize = 13
+    okBtn.AutoButtonColor = false
+    okBtn.Parent = card
+    Instance.new("UICorner", okBtn).CornerRadius = UDim.new(0,8)
+
+    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(shade, ti, {BackgroundTransparency = 0.55}):Play()
+    TweenService:Create(card, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0
+    }):Play()
+    TweenService:Create(cs, ti, {Transparency = 0.35}):Play()
+    task.delay(0.05, function()
+        TweenService:Create(tl, ti, {TextTransparency = 0}):Play()
+        TweenService:Create(bl, ti, {TextTransparency = 0}):Play()
+        TweenService:Create(okBtn, ti, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+    end)
+
+    okBtn.MouseEnter:Connect(function() TweenService:Create(okBtn,ti,{BackgroundColor3=Color3.fromRGB(230,50,70)}):Play() end)
+    okBtn.MouseLeave:Connect(function() TweenService:Create(okBtn,ti,{BackgroundColor3=Color3.fromRGB(190,28,48)}):Play() end)
+    okBtn.MouseButton1Click:Connect(function() pcall(function() sg:Destroy() end) end)
+    return
+end
+
+-- ══════════════════════════════════════════════════════════
+--  NETTOYAGE SESSION PRÉCÉDENTE
+-- ══════════════════════════════════════════════════════════
+local GENV = typeof(getgenv) == "function" and getgenv() or nil
+pcall(function()
+    if GENV and GENV.KURAIMOKA_Unload then GENV.KURAIMOKA_Unload() end
+end)
+for _, g in ipairs(game:GetService("CoreGui"):GetChildren()) do
+    if g.Name == "KuraiMoka" or g.Name == "KuraiMoka_ESP" then
+        pcall(function() g:Destroy() end)
+    end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  MONTAGE GUI
+-- ══════════════════════════════════════════════════════════
+local function mountPoint()
+    if typeof(gethui) == "function" then
+        local ok, h = pcall(gethui)
+        if ok and typeof(h) == "Instance" then return h end
+    end
+    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
+    if ok then return cg end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local Mount = mountPoint()
+local function protect(gui)
+    pcall(function()
+        if typeof(syn) == "table" and syn.protect_gui then syn.protect_gui(gui)
+        elseif typeof(protectgui) == "function" then protectgui(gui) end
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════
+--  THÈME KURAIMOKA
+-- ══════════════════════════════════════════════════════════
+local T = {
+    -- Backgrounds
+    Bg0    = Color3.fromRGB(8,   8,  12),
+    Bg1    = Color3.fromRGB(13,  13, 19),
+    Bg2    = Color3.fromRGB(18,  18, 26),
+    Bg3    = Color3.fromRGB(24,  24, 34),
+    Bg4    = Color3.fromRGB(32,  32, 46),
+    -- Accent signature KuraiMoka : rouge + teinte chaude
+    Accent     = Color3.fromRGB(195, 32,  55),
+    AccentDim  = Color3.fromRGB(110, 17,  30),
+    AccentGlow = Color3.fromRGB(255, 75,  95),
+    AccentWarm = Color3.fromRGB(225, 90,  50),
+    -- Texte
+    TextPrim   = Color3.fromRGB(238, 238, 248),
+    TextSec    = Color3.fromRGB(160, 160, 180),
+    TextMuted  = Color3.fromRGB(90,  90,  112),
+    -- Status
+    Success    = Color3.fromRGB(65,  205, 105),
+    Warning    = Color3.fromRGB(245, 185, 45),
+    Error      = Color3.fromRGB(235, 65,  65),
+    Info       = Color3.fromRGB(65,  145, 245),
+    -- Rôles MM2
+    Murder     = Color3.fromRGB(255, 55,  75),
+    Sheriff    = Color3.fromRGB(55,  155, 255),
+    Innocent   = Color3.fromRGB(85,  225, 125),
+    -- UI
+    Sep        = Color3.fromRGB(30,  30,  45),
+    TogOn      = Color3.fromRGB(195, 32,  55),
+    TogOff     = Color3.fromRGB(48,  48,  66),
+}
+
+-- ══════════════════════════════════════════════════════════
+--  ANIMATIONS
+-- ══════════════════════════════════════════════════════════
+local AI_FAST   = TweenInfo.new(0.14, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
+local AI_MED    = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+local AI_SPRING = TweenInfo.new(0.38, Enum.EasingStyle.Back,  Enum.EasingDirection.Out)
+local AI_LINEAR = TweenInfo.new(1.0,  Enum.EasingStyle.Linear)
+
+local function TW(obj, info, props)
+    if not obj or not obj.Parent then return end
+    TweenService:Create(obj, info, props):Play()
+end
+
+-- ══════════════════════════════════════════════════════════
+--  STATE GLOBAL
+-- ══════════════════════════════════════════════════════════
+local Unloaded = false
+local function isDead() return Unloaded end
+
+local flags = {
+    -- Combat
+    autoKill       = false,
+    aimbot         = false,
+    silentAim      = false,
+    showFov        = false,
+    knifeWalls     = false,
+    gunWalls       = false,
+    instantKnife   = false,
+    gunEsp         = false,
+    gunEspDist     = false,
+    autoGun        = false,
+    autoFlingMurd  = false,
+    autoFlingSheriff = false,
+    -- Player
+    fly            = false,
+    flySpeed       = 60,
+    noclip         = false,
+    infJump        = false,
+    unlockCam      = false,
+    walkSpeed      = 16,
+    jumpPower      = 50,
+    walkSpeedOn    = false,
+    jumpPowerOn    = false,
+    -- Visuals
+    espNames       = false,
+    espBox         = false,
+    espChams       = false,
+    espFill        = false,
+    espRoleTags    = false,
+    espTracers     = false,
+    espMaxDist     = 0,
+    espTracerFrom  = "Bottom",
+    espSkeleton    = false,
+    espAvatar      = false,
+    coinEsp        = false,
+    trapEsp        = false,
+    killFeed       = false,
+    fullbright     = false,
+    fpsBoost       = false,
+    footsteps      = false,
+    footMine       = false,
+    -- Safety
+    antiFling      = false,
+    antiTrap       = false,
+    -- Utility
+    autoCoins      = false,
+    murdNotify     = false,
+    antiAfk        = false,
+    -- Fling
+    flingPower     = 10000,
+    flingSeconds   = 1,
+}
+
+local KM = {
+    plrs       = {},
+    tpAt       = -10,
+    TP_GRACE   = 2.5,
+    selfTpAt   = -10,
+    unclip     = setmetatable({}, {__mode="k"}),
+    wantPS     = false,
+    wantNoclip = false,
+    tagOwners  = {},
+    COIN_MAX_DIST = 250,
+    espLimit   = 250,
+    flungAt    = setmetatable({}, {__mode="k"}),
+    FLING_MAX_DY   = 140,
+    FLING_MAX_RISE = 320,
+    SNAP_HEIGHT    = 5,
+    GUN_COOLDOWN   = 3.25,
+    SNAP_COOLDOWN  = 3.25,
+    snapAt         = -10,
+    shotLag        = 0.08,
+    WALL_BACKOFF   = 0.6,
+    SILENT_HOLD    = 1.8,
+}
+
+function KM.teleporting()  return os.clock() - KM.tpAt   < KM.TP_GRACE end
+function KM.markTeleport() KM.tpAt = os.clock() end
+function KM.markSelfTP()   KM.selfTpAt = os.clock() end
+function KM.selfTeleporting() return os.clock() - KM.selfTpAt < 0.35 end
+
+-- ══════════════════════════════════════════════════════════
+--  CONNEXIONS (cleanup propre)
+-- ══════════════════════════════════════════════════════════
+local conns = {}
+local function bind(sig, fn)
+    local c = sig:Connect(fn)
+    table.insert(conns, c)
+    return c
+end
+
+-- ══════════════════════════════════════════════════════════
+--  HELPERS PERSONNAGE
+-- ══════════════════════════════════════════════════════════
+local function getHRP(ch)  return ch and ch:FindFirstChild("HumanoidRootPart") end
+local function getHum(ch)  return ch and ch:FindFirstChildOfClass("Humanoid") end
+local function myChar()    return LocalPlayer.Character end
+local function myRoot()    return getHRP(myChar()) end
+local function myHum()     return getHum(myChar()) end
+
+local function badVec(v)
+    if typeof(v) ~= "Vector3" then return true end
+    if v.X~=v.X or v.Y~=v.Y or v.Z~=v.Z then return true end
+    local inf = math.huge
+    return v.X==inf or v.X==-inf or v.Y==inf or v.Y==-inf or v.Z==inf or v.Z==-inf
+end
+
+local function badCF(cf)
+    if typeof(cf) ~= "CFrame" then return true end
+    local p = cf.Position
+    if badVec(p) then return true end
+    return math.abs(p.X) > 1e6 or math.abs(p.Y) > 1e6 or math.abs(p.Z) > 1e6
+end
+
+-- ══════════════════════════════════════════════════════════
+--  JOUEURS
+-- ══════════════════════════════════════════════════════════
+function KM.refreshPlrs()
+    local ok, list = pcall(function() return Players:GetPlayers() end)
+    if ok and type(list) == "table" then KM.plrs = list end
+end
+KM.refreshPlrs()
+bind(Players.PlayerAdded,    KM.refreshPlrs)
+bind(Players.PlayerRemoving, function() task.defer(KM.refreshPlrs) end)
+
+-- ══════════════════════════════════════════════════════════
+--  RÔLES
+-- ══════════════════════════════════════════════════════════
+local CRC; pcall(function()
+    CRC = require(RS:WaitForChild("Modules"):WaitForChild("CurrentRoundClient"))
+end)
+
+local function roundData(plr)
+    return CRC and CRC.PlayerData and CRC.PlayerData[plr.Name]
+end
+
+function KM.refreshTags()
+    for _, tag in ipairs({"Weapon_Gun","Weapon_Knife"}) do
+        local m = KM.tagOwners[tag]
+        if m then table.clear(m) else m = {}; KM.tagOwners[tag] = m end
+        for _, t in ipairs(CollectionService:GetTagged(tag)) do
+            local par = t.Parent
+            if par then m[par] = true end
+        end
+    end
+end
+KM.refreshTags()
+
+local function playerHasTag(plr, tag)
+    local m = KM.tagOwners[tag]; if not m then return false end
+    local ch = plr.Character
+    if ch and m[ch] then return true end
+    local bp = plr:FindFirstChildOfClass("Backpack")
+    if bp and m[bp] then return true end
+    return false
+end
+
+local function charHasWeapon(ch, kind)
+    for _, t in ipairs(ch:GetChildren()) do
+        if t:IsA("Tool") then
+            if kind == "Gun"   and (t.Name == "Gun"   or t:FindFirstChild("Shoot"))  then return true end
+            if kind == "Knife" and (t.Name == "Knife" or t:FindFirstChild("Events")) then return true end
+        end
+    end
+    return false
+end
+
+local CACHE_TTL = 0.05
+local roleCache, aliveCache, cacheStamp = {}, {}, 0
+
+local function sweepCaches()
+    local now = os.clock()
+    if now - cacheStamp > CACHE_TTL then
+        table.clear(roleCache); table.clear(aliveCache); cacheStamp = now
+        KM.refreshTags()
+    end
+    if now - (KM.rosterAt or 0) > 2 then
+        KM.rosterAt = now; KM.refreshPlrs()
+    end
+end
+
+local function computeRole(plr)
+    local d = roundData(plr); local r = d and d.Role
+    if r == "Murderer" then return "Murderer" end
+    if r == "Sheriff" or r == "Hero" then return r end
+    local ch = plr.Character
+    if playerHasTag(plr,"Weapon_Gun")   or (ch and charHasWeapon(ch,"Gun"))   then return "Hero" end
+    if playerHasTag(plr,"Weapon_Knife") or (ch and charHasWeapon(ch,"Knife")) then return "Murderer" end
+    return r or "Innocent"
+end
+
+local function computeAlive(plr)
+    local d = roundData(plr); if d and d.Dead == true then return false end
+    local ch = plr.Character; local hum = ch and getHum(ch)
+    return ch and hum and hum.Health > 0 and getHRP(ch)
+end
+
+local function roleOf(plr)
+    sweepCaches()
+    local v = roleCache[plr]
+    if v == nil then v = computeRole(plr); roleCache[plr] = v end
+    return v
+end
+
+local function alive(plr)
+    sweepCaches()
+    local v = aliveCache[plr]
+    if v == nil then v = computeAlive(plr) or false; aliveCache[plr] = v end
+    return v
+end
+
+local function isGunRole(role) return role == "Sheriff" or role == "Hero" end
+local function myRole()        return roleOf(LocalPlayer) end
+local function findMurderer()
+    for _, p in ipairs(KM.plrs) do if roleOf(p) == "Murderer" then return p end end
+end
+
+function KM.hasBody(plr)
+    local ch = plr.Character; if not ch then return nil end
+    local hum = getHum(ch); if not (hum and hum.Health > 0) then return nil end
+    local hrp = getHRP(ch); if not hrp then return nil end
+    return ch, hum, hrp
+end
+
+local function roleColor(role)
+    if role == "Murderer" then return T.Murder end
+    if isGunRole(role)    then return T.Sheriff end
+    return T.Innocent
+end
+
+local function roleLabel(role)
+    if role == "Murderer" then return "[M]" end
+    if isGunRole(role)    then return "[S]" end
+    return "[I]"
+end
+
+function KM.espRole(plr)
+    local d = roundData(plr)
+    if d and d.Dead == true then return "Innocent" end
+    return roleOf(plr)
+end
+
+-- ══════════════════════════════════════════════════════════
+--  CANACT
+-- ══════════════════════════════════════════════════════════
+function KM.canAct()
+    if KM.teleporting() then return false end
+    local ch = myChar(); if not ch or not ch.Parent then return false end
+    local hum = getHum(ch); if not (hum and hum.Health > 0) then return false end
+    if not getHRP(ch) then return false end
+    if LocalPlayer:GetAttribute("Alive") == false then return false end
+    local d = roundData(LocalPlayer)
+    if d and d.Dead == true then return false end
+    return true
+end
+
+-- ══════════════════════════════════════════════════════════
+--  GUI FACTORY
+-- ══════════════════════════════════════════════════════════
+local function New(cls, props, parent)
+    local o = Instance.new(cls)
+    if parent then o.Parent = parent end
+    for k, v in pairs(props or {}) do pcall(function() o[k] = v end) end
+    return o
+end
+local function Corner(r, p) return New("UICorner", {CornerRadius = UDim.new(0, r or 8)}, p) end
+local function Stroke(col, th, p)
+    return New("UIStroke", {
+        Color = col, Thickness = th or 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, p)
+end
+local function List(sp, p)
+    return New("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, sp or 4)}, p)
+end
+local function Pad(l, r, t, b, p)
+    return New("UIPadding", {
+        PaddingLeft = UDim.new(0,l), PaddingRight = UDim.new(0,r),
+        PaddingTop  = UDim.new(0,t), PaddingBottom = UDim.new(0,b),
+    }, p)
+end
+local function AutoCanvas(scroll, layout)
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 12)
+    end)
+end
+local function Safe(fn, ...) local ok, err = pcall(fn, ...); if not ok then warn("[KuraiMoka] " .. tostring(err)) end return ok end
+
+-- ══════════════════════════════════════════════════════════
+--  DRAWING / ESP
+-- ══════════════════════════════════════════════════════════
+local hasDrawing = typeof(Drawing) == "table" and pcall(function()
+    local p = Drawing.new("Line"); p:Remove()
+end)
+
+local drawn = {}
+local function trackDraw(o) drawn[o] = true; return o end
+local function dropDraw(o)
+    if o == nil then return end
+    drawn[o] = nil
+    pcall(function() o:Remove() end)
+end
+local function clearDrawn()
+    for o in pairs(drawn) do pcall(function() o:Remove() end) end
+    table.clear(drawn)
+end
+
+local EspGui = New("ScreenGui", {
+    Name = "KuraiMoka_ESP",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = false,
+    DisplayOrder = 998,
+}, Mount)
+protect(EspGui)
+
+-- Line wrapper
+local lineMT = {}
+local function applyLine(t)
+    local f = rawget(t, "_f"); if not (f and f.Parent) then return end
+    local a, b = rawget(t,"_From"), rawget(t,"_To"); if not (a and b) then return end
+    local d = b - a
+    f.Position = UDim2.fromOffset((a.X+b.X)*0.5, (a.Y+b.Y)*0.5)
+    f.Size     = UDim2.fromOffset(math.max(d.Magnitude,1), math.max(rawget(t,"_Thickness") or 1, 1))
+    f.Rotation = math.deg(math.atan2(d.Y, d.X))
+end
+lineMT.__index = function(t, k)
+    if k == "Remove" then return function(self)
+        local f = rawget(self,"_f"); if f then pcall(function() f:Destroy() end) end
+    end end
+    return rawget(t, "_"..k)
+end
+lineMT.__newindex = function(t, k, v)
+    rawset(t, "_"..k, v)
+    local f = rawget(t,"_f"); if not (f and f.Parent) then return end
+    if k=="Visible" then f.Visible = v==true
+    elseif k=="Color" then f.BackgroundColor3 = v
+    elseif k=="Transparency" then f.BackgroundTransparency = 1-(tonumber(v) or 1)
+    elseif k=="From" or k=="To" or k=="Thickness" then applyLine(t) end
+end
+
+local function newLine(thickness)
+    if hasDrawing then
+        local l = Drawing.new("Line"); l.Thickness = thickness; l.Transparency = 1; l.Visible = false
+        return trackDraw(l)
+    end
+    local t = setmetatable({}, lineMT)
+    rawset(t, "_f", New("Frame", {
+        AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0,
+        BackgroundColor3 = Color3.new(1,1,1), Visible = false, ZIndex = 3,
+    }, EspGui))
+    rawset(t, "_Thickness", thickness); rawset(t, "_Visible", false)
+    return t
+end
+
+-- FOV Circle
+local FovCircle = New("Frame", {
+    AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.fromScale(0.5,0.5),
+    Size = UDim2.fromOffset(240,240), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false,
+}, EspGui)
+Corner(999, FovCircle)
+New("UIStroke", {Color = T.Accent, Thickness = 1.5, Transparency = 0.25}, FovCircle)
+
+-- ══════════════════════════════════════════════════════════
+--  SCREEN GUI PRINCIPAL
+-- ══════════════════════════════════════════════════════════
+local SG = New("ScreenGui", {
+    Name = "KuraiMoka",
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    IgnoreGuiInset = true,
+    DisplayOrder = 999,
+}, Mount)
+protect(SG)
+
+-- ══════════════════════════════════════════════════════════
+--  NOTIFICATIONS
+-- ══════════════════════════════════════════════════════════
+local NotifHolder = New("Frame", {
+    Name = "NotifHolder",
+    AnchorPoint = Vector2.new(1,1),
+    Position = UDim2.new(1,-18,1,-18),
+    Size = UDim2.fromOffset(300,1),
+    BackgroundTransparency = 1,
+    ZIndex = 100,
+}, SG)
+New("UIListLayout", {
+    VerticalAlignment = Enum.VerticalAlignment.Bottom,
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    Padding = UDim.new(0,6),
+}, NotifHolder)
+
+local _notifSeq  = 0
+local _notifStack = {}
+local NOTIF_MAX  = 5
+local NOTIF_COLORS = {success=T.Success, info=T.Info, warning=T.Warning, error=T.Error}
+local NOTIF_ICONS  = {success="✓", info="ℹ", warning="⚠", error="✕"}
+
+local function Notify(title, msg, ntype, dur)
+    ntype = ntype or "info"
+    dur   = dur   or 4
+    if #_notifStack >= NOTIF_MAX then
+        local old = table.remove(_notifStack, 1)
+        if old and old.Parent then old:Destroy() end
+    end
+    _notifSeq = _notifSeq + 1
+    local col  = NOTIF_COLORS[ntype] or T.Info
+    local icon = NOTIF_ICONS[ntype] or "ℹ"
+
+    local card = New("Frame", {
+        Name = "KM_Notif",
+        BackgroundColor3 = T.Bg2,
+        BorderSizePixel  = 0,
+        Size             = UDim2.new(1,0,0,66),
+        BackgroundTransparency = 1,
+        LayoutOrder = _notifSeq,
+        ZIndex = 101,
+    }, NotifHolder)
+    Corner(10, card)
+
+    New("Frame", {
+        BackgroundColor3 = col, BorderSizePixel = 0,
+        Position = UDim2.new(0,0,0,0), Size = UDim2.new(0,3,1,0), ZIndex = 102,
+    }, card)
+
+    local ibg = New("Frame", {
+        BackgroundColor3 = col, BackgroundTransparency = 0.75,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0,10,0.5,-13), Size = UDim2.fromOffset(26,26), ZIndex = 102,
+    }, card)
+    Corner(99, ibg)
+    New("TextLabel", {
+        BackgroundTransparency = 1, Size = UDim2.fromScale(1,1),
+        Font = Enum.Font.GothamBold, Text = icon,
+        TextColor3 = col, TextSize = 13, ZIndex = 103,
+    }, ibg)
+
+    New("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0,44,0,10), Size = UDim2.new(1,-56,0,20),
+        Font = Enum.Font.GothamBold, Text = tostring(title),
+        TextColor3 = T.TextPrim, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 102,
+    }, card)
+
+    New("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0,44,0,30), Size = UDim2.new(1,-56,0,26),
+        Font = Enum.Font.Gotham, Text = tostring(msg),
+        TextColor3 = T.TextSec, TextSize = 11, TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 102,
+    }, card)
+
+    local prog = New("Frame", {
+        BackgroundColor3 = col, BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0,4,1,-3), Size = UDim2.new(1,-8,0,2), ZIndex = 102,
+    }, card)
+    Corner(2, prog)
+
+    table.insert(_notifStack, card)
+    TW(card, AI_SPRING, {BackgroundTransparency = 0})
+    TW(prog, TweenInfo.new(dur, Enum.EasingStyle.Linear), {Size = UDim2.new(0,0,0,2)})
+
+    task.delay(dur, function()
+        if not card or not card.Parent then return end
+        TW(card, AI_MED, {BackgroundTransparency = 1, Position = UDim2.new(1,8,0,0)})
+        task.delay(0.26, function()
+            if card and card.Parent then
+                local idx = table.find(_notifStack, card)
+                if idx then table.remove(_notifStack, idx) end
+                card:Destroy()
+            end
+        end)
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════
+--  FENÊTRE PRINCIPALE
+-- ══════════════════════════════════════════════════════════
+local WIN_W, WIN_H, SIDE_W = 720, 490, 180
+local MenuOpen = true
+local _minimized = false
+
+local Win = New("Frame", {
+    Name = "KuraiMoka_Win",
+    BackgroundColor3 = T.Bg1,
+    BorderSizePixel  = 0,
+    Position         = UDim2.fromOffset(80, 55),
+    Size             = UDim2.fromOffset(WIN_W, WIN_H),
+    Active           = true,
+    Draggable        = true,
+    ClipsDescendants = false,
+}, SG)
+Corner(14, Win)
+
+-- Shadow
+New("ImageLabel", {
+    BackgroundTransparency = 1,
+    Position  = UDim2.fromOffset(-26, -26),
+    Size      = UDim2.new(1, 52, 1, 52),
+    ZIndex    = -1,
+    Image     = "rbxassetid://5028857084",
+    ImageColor3 = T.Accent,
+    ImageTransparency = 0.72,
+    ScaleType = Enum.ScaleType.Slice,
+    SliceCenter = Rect.new(24,24,276,276),
+}, Win)
+
+-- Barre de couleur en haut
+local TopAccent = New("Frame", {
+    BackgroundColor3 = T.Accent, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(14,0), Size = UDim2.new(1,-28,0,2), ZIndex = 10,
+}, Win)
+Corner(2, TopAccent)
+
+-- ── HEADER ──────────────────────────────────────────────
+local Header = New("Frame", {
+    BackgroundColor3 = T.Bg2, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(0,2), Size = UDim2.new(1,0,0,56),
+}, Win)
+
+-- Logo texte "KM" en accent + nom
+New("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.fromOffset(16,0), Size = UDim2.fromOffset(28,1), SizeConstraint = Enum.SizeConstraint.RelativeYY,
+    Font = Enum.Font.GothamBlack, Text = "K",
+    TextColor3 = T.Accent, TextSize = 26,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, Header)
+New("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.fromOffset(38,0), Size = UDim2.fromOffset(100,1), SizeConstraint = Enum.SizeConstraint.RelativeYY,
+    Font = Enum.Font.GothamBold, Text = "uraiMoka",
+    TextColor3 = T.TextPrim, TextSize = 19,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, Header)
+
+-- Badge version
+local vBadge = New("Frame", {
+    BackgroundColor3 = T.AccentDim, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(218, 0), SizeConstraint = Enum.SizeConstraint.RelativeYY,
+    Size = UDim2.fromOffset(44,0), AnchorPoint = Vector2.new(0,0.5),
+}, Header)
+vBadge.Position = UDim2.new(0,218,0.5,-10)
+vBadge.Size = UDim2.fromOffset(44,20)
+Corner(99, vBadge)
+New("TextLabel", {
+    BackgroundTransparency = 1, Size = UDim2.fromScale(1,1),
+    Font = Enum.Font.GothamBold, Text = "v1.0",
+    TextColor3 = T.AccentGlow, TextSize = 11,
+}, vBadge)
+
+-- Dot actif
+local statusDot = New("Frame", {
+    BackgroundColor3 = T.Success, BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(0,0.5),
+    Position = UDim2.new(0,272,0.5,0), Size = UDim2.fromOffset(8,8),
+}, Header)
+Corner(99, statusDot)
+New("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.new(0,286,0,0), Size = UDim2.new(0,80,1,0),
+    Font = Enum.Font.Gotham, Text = "Active",
+    TextColor3 = T.Success, TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, Header)
+
+-- Bouton fermer
+local CloseBtn = New("TextButton", {
+    BackgroundColor3 = T.Accent, BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(1,0.5),
+    Position = UDim2.new(1,-14,0.5,0), Size = UDim2.fromOffset(28,28),
+    Font = Enum.Font.GothamBold, Text = "✕",
+    TextColor3 = T.TextPrim, TextSize = 13,
+    AutoButtonColor = false,
+}, Header)
+Corner(8, CloseBtn)
+CloseBtn.MouseEnter:Connect(function() TW(CloseBtn,AI_FAST,{BackgroundColor3=T.AccentGlow}) end)
+CloseBtn.MouseLeave:Connect(function() TW(CloseBtn,AI_FAST,{BackgroundColor3=T.Accent}) end)
+CloseBtn.MouseButton1Click:Connect(function()
+    TW(Win, AI_MED, {Size = UDim2.fromOffset(WIN_W, 0)})
+    task.delay(0.28, function()
+        Win.Visible = false
+        Win.Size    = UDim2.fromOffset(WIN_W, WIN_H)
+        MenuOpen    = false
+    end)
+end)
+
+-- Bouton minimize
+local MinBtn = New("TextButton", {
+    BackgroundColor3 = T.Bg3, BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(1,0.5),
+    Position = UDim2.new(1,-48,0.5,0), Size = UDim2.fromOffset(28,28),
+    Font = Enum.Font.GothamBold, Text = "—",
+    TextColor3 = T.TextSec, TextSize = 13,
+    AutoButtonColor = false,
+}, Header)
+Corner(8, MinBtn)
+MinBtn.MouseEnter:Connect(function() TW(MinBtn,AI_FAST,{BackgroundColor3=T.Bg4}) end)
+MinBtn.MouseLeave:Connect(function() TW(MinBtn,AI_FAST,{BackgroundColor3=T.Bg3}) end)
+MinBtn.MouseButton1Click:Connect(function()
+    _minimized = not _minimized
+    TW(Win, AI_MED, {Size = _minimized and UDim2.fromOffset(WIN_W,58) or UDim2.fromOffset(WIN_W,WIN_H)})
+end)
+
+New("Frame", {
+    BackgroundColor3 = T.Sep, BorderSizePixel = 0,
+    Position = UDim2.new(0,0,1,-1), Size = UDim2.new(1,0,0,1),
+}, Header)
+
+-- ── SIDEBAR ─────────────────────────────────────────────
+local Sidebar = New("Frame", {
+    BackgroundColor3 = T.Bg2, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(0,58), Size = UDim2.new(0,SIDE_W,1,-58),
+}, Win)
+New("Frame", {
+    BackgroundColor3 = T.Sep, BorderSizePixel = 0,
+    Position = UDim2.new(1,-1,0,0), Size = UDim2.new(0,1,1,0),
+}, Sidebar)
+
+-- Avatar utilisateur
+New("Frame", {BackgroundColor3=T.Sep,BorderSizePixel=0,Position=UDim2.new(0,8,1,-72),Size=UDim2.new(1,-16,0,1)}, Sidebar)
+local UserBox = New("Frame", {BackgroundColor3=T.Bg0,BorderSizePixel=0,Position=UDim2.new(0,8,1,-66),Size=UDim2.new(1,-16,0,58)}, Sidebar)
+Corner(10, UserBox)
+local avBg = New("Frame", {BackgroundColor3=T.AccentDim,BorderSizePixel=0,AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,8,0.5,0),Size=UDim2.fromOffset(32,32)}, UserBox)
+Corner(99, avBg)
+New("ImageLabel", {BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+    Image="https://www.roblox.com/headshot-thumbnail/image?userId="..LocalPlayer.UserId.."&width=48&height=48&format=png",
+    ScaleType=Enum.ScaleType.Fit}, avBg)
+Corner(99, avBg)
+New("TextLabel", {BackgroundTransparency=1,Position=UDim2.new(0,48,0,9),Size=UDim2.new(1,-56,0,18),
+    Font=Enum.Font.GothamBold,Text=LocalPlayer.DisplayName,TextColor3=T.TextPrim,TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd}, UserBox)
+New("TextLabel", {BackgroundTransparency=1,Position=UDim2.new(0,48,0,29),Size=UDim2.new(1,-56,0,14),
+    Font=Enum.Font.Gotham,Text="@"..LocalPlayer.Name,TextColor3=T.TextMuted,TextSize=10,
+    TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd}, UserBox)
+
+-- Scroll tabs
+local TabScroll = New("ScrollingFrame", {
+    BackgroundTransparency=1, BorderSizePixel=0,
+    Position=UDim2.fromOffset(0,8), Size=UDim2.new(1,0,1,-80),
+    ScrollBarThickness=0, CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y,
+}, Sidebar)
+local TabLayout = List(2, TabScroll)
+Pad(5,5,0,0, TabScroll)
+AutoCanvas(TabScroll, TabLayout)
+
+-- ── CONTENU ─────────────────────────────────────────────
+local ContentArea = New("Frame", {
+    BackgroundColor3 = T.Bg1, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(SIDE_W,58), Size = UDim2.new(1,-SIDE_W,1,-58),
+    ClipsDescendants = true,
+}, Win)
+
+local ContentTitle = New("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.fromOffset(16,0), Size = UDim2.new(1,-32,0,44),
+    Font = Enum.Font.GothamBold, Text = "Dashboard",
+    TextColor3 = T.TextPrim, TextSize = 17,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, ContentArea)
+New("Frame", {BackgroundColor3=T.Sep,BorderSizePixel=0,Position=UDim2.new(0,0,0,43),Size=UDim2.new(1,0,0,1)}, ContentArea)
+
+local ContentScroll = New("ScrollingFrame", {
+    BackgroundTransparency=1, BorderSizePixel=0,
+    Position=UDim2.fromOffset(0,44), Size=UDim2.new(1,0,1,-44),
+    ScrollBarThickness=3, ScrollBarImageColor3=T.Accent,
+    CanvasSize=UDim2.new(), ScrollingDirection=Enum.ScrollingDirection.Y,
+}, ContentArea)
+local ContentList = List(4, ContentScroll)
+Pad(12,12,8,14, ContentScroll)
+AutoCanvas(ContentScroll, ContentList)
+
+-- ══════════════════════════════════════════════════════════
+--  COMPOSANTS UI
+-- ══════════════════════════════════════════════════════════
+local function Section(parent, title)
+    local f = New("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,30)}, parent)
+    New("TextLabel", {
+        BackgroundTransparency=1, Position=UDim2.fromOffset(2,10), Size=UDim2.new(1,-4,0,14),
+        Font=Enum.Font.GothamBold, Text=title:upper(), TextColor3=T.Accent, TextSize=10,
+        TextXAlignment=Enum.TextXAlignment.Left,
+    }, f)
+    New("Frame", {BackgroundColor3=T.Sep,BorderSizePixel=0,Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1)}, f)
+    return f
+end
+
+local function Spacer(p, h)
+    return New("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,h or 6)}, p)
+end
+
+local function MkToggle(parent, title, sub, val, cb)
+    local rowH = sub and 56 or 46
+    local row = New("Frame", {BackgroundColor3=T.Bg3,BorderSizePixel=0,Size=UDim2.new(1,0,0,rowH)}, parent)
+    Corner(10, row)
+    New("TextLabel", {
+        BackgroundTransparency=1, Position=UDim2.new(0,14,0,sub and 8 or 0), Size=UDim2.new(1,-78,0,22),
+        Font=Enum.Font.Gotham, Text=title, TextColor3=T.TextPrim, TextSize=13,
+        TextXAlignment=Enum.TextXAlignment.Left,
+    }, row)
+    if sub then
+        New("TextLabel", {
+            BackgroundTransparency=1, Position=UDim2.new(0,14,0,30), Size=UDim2.new(1,-78,0,16),
+            Font=Enum.Font.Gotham, Text=sub, TextColor3=T.TextMuted, TextSize=10,
+            TextXAlignment=Enum.TextXAlignment.Left,
+        }, row)
+    end
+    local track = New("Frame", {
+        BackgroundColor3=val and T.TogOn or T.TogOff, BorderSizePixel=0,
+        Position=UDim2.new(1,-60,0.5,-12), Size=UDim2.fromOffset(46,24),
+    }, row)
+    Corner(99, track)
+    local thumb = New("Frame", {
+        BackgroundColor3=T.TextPrim, BorderSizePixel=0,
+        Position=val and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10),
+        Size=UDim2.fromOffset(20,20),
+    }, track)
+    Corner(99, thumb)
+    local btn = New("TextButton", {BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Text="",ZIndex=6}, row)
+    local function SetV(v)
+        val = v
+        TW(track,AI_FAST,{BackgroundColor3=v and T.TogOn or T.TogOff})
+        TW(thumb,AI_FAST,{Position=v and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)})
+    end
+    btn.MouseButton1Click:Connect(function()
+        SetV(not val)
+        TW(row,AI_FAST,{BackgroundColor3=T.Bg4})
+        task.delay(0.1, function() TW(row,AI_FAST,{BackgroundColor3=T.Bg3}) end)
+        if cb then Safe(cb, val) end
+    end)
+    btn.MouseEnter:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg4}) end)
+    btn.MouseLeave:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg3}) end)
+    return row, SetV
+end
+
+local function MkSlider(parent, title, min, max, def, cb, suffix)
+    suffix = suffix or ""
+    local cur = def
+    local row = New("Frame",{BackgroundColor3=T.Bg3,BorderSizePixel=0,Size=UDim2.new(1,0,0,68)},parent)
+    Corner(10,row)
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(14,8),Size=UDim2.new(0.65,0,0,22),
+        Font=Enum.Font.Gotham,Text=title,TextColor3=T.TextPrim,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left},row)
+    local vbg=New("Frame",{BackgroundColor3=T.Bg0,BorderSizePixel=0,Position=UDim2.new(1,-64,0,8),Size=UDim2.fromOffset(52,22)},row)
+    Corner(7,vbg)
+    local vLbl=New("TextLabel",{BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Font=Enum.Font.GothamBold,
+        Text=tostring(def)..suffix,TextColor3=T.Accent,TextSize=12},vbg)
+    local trBg=New("Frame",{BackgroundColor3=Color3.fromRGB(28,28,44),BorderSizePixel=0,
+        Position=UDim2.new(0,14,0,46),Size=UDim2.new(1,-28,0,6)},row)
+    Corner(99,trBg)
+    local pct=(cur-min)/(max-min)
+    local fill=New("Frame",{BackgroundColor3=T.Accent,BorderSizePixel=0,Size=UDim2.new(pct,0,1,0)},trBg)
+    Corner(99,fill)
+    local knob=New("Frame",{BackgroundColor3=T.TextPrim,BorderSizePixel=0,
+        Position=UDim2.new(pct,-9,0.5,-9),Size=UDim2.fromOffset(18,18),ZIndex=4},trBg)
+    Corner(99,knob)
+    Stroke(T.Sep,1.5,knob)
+    local dragging=false
+    local function UpdateAt(x)
+        local ap=trBg.AbsolutePosition.X; local as=trBg.AbsoluteSize.X
+        local r=math.clamp((x-ap)/as,0,1)
+        cur=math.floor(min+(max-min)*r)
+        fill.Size=UDim2.new(r,0,1,0); knob.Position=UDim2.new(r,-9,0.5,-9)
+        vLbl.Text=tostring(cur)..suffix
+        if cb then Safe(cb,cur) end
+    end
+    trBg.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=true; UpdateAt(i.Position.X) end
+    end)
+    bind(UserInputService.InputChanged,function(i)
+        if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then UpdateAt(i.Position.X) end
+    end)
+    bind(UserInputService.InputEnded,function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+    end)
+    row.MouseEnter:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg4}) end)
+    row.MouseLeave:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg3}) end)
+    return row
+end
+
+local function MkButton(parent, title, sub, accent, cb)
+    local rowH = sub and 54 or 44
+    local row = New("Frame",{BackgroundColor3=accent and T.AccentDim or T.Bg3,BorderSizePixel=0,Size=UDim2.new(1,0,0,rowH)},parent)
+    Corner(10,row)
+    if accent then Stroke(T.Accent,1,row) end
+    local tx = 14
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,tx,0,sub and 8 or 0),
+        Size=UDim2.new(1,-(tx+14),0,22),Font=Enum.Font.Gotham,Text=title,TextColor3=T.TextPrim,
+        TextSize=13,TextXAlignment=Enum.TextXAlignment.Left},row)
+    if sub then
+        New("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,tx,0,30),
+            Size=UDim2.new(1,-(tx+14),0,16),Font=Enum.Font.Gotham,Text=sub,TextColor3=T.TextMuted,
+            TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},row)
+    end
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(1,-28,0,0),Size=UDim2.fromOffset(20,1),
+        SizeConstraint=Enum.SizeConstraint.RelativeYY,
+        Font=Enum.Font.GothamBold,Text="›",TextColor3=T.TextMuted,TextSize=18},row)
+    local btn = New("TextButton",{BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Text="",ZIndex=6},row)
+    btn.MouseEnter:Connect(function() TW(row,AI_FAST,{BackgroundColor3=accent and T.AccentDim or T.Bg4}) end)
+    btn.MouseLeave:Connect(function() TW(row,AI_FAST,{BackgroundColor3=accent and T.AccentDim or T.Bg3}) end)
+    btn.MouseButton1Click:Connect(function()
+        TW(row,AI_FAST,{BackgroundColor3=T.Bg0})
+        task.delay(0.12,function() TW(row,AI_FAST,{BackgroundColor3=accent and T.AccentDim or T.Bg3}) end)
+        if cb then Safe(cb) end
+    end)
+    return row
+end
+
+local function MkPicker(parent, title, opts, def, cb)
+    local sel=def or opts[1] or ""
+    local open=false
+    local IH=30; local dropH=#opts*IH+8
+    local container=New("Frame",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,46),ZIndex=8,ClipsDescendants=false},parent)
+    local row=New("Frame",{BackgroundColor3=T.Bg3,BorderSizePixel=0,Size=UDim2.new(1,0,0,46),ZIndex=8},container)
+    Corner(10,row)
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(14,0),Size=UDim2.new(0.55,0,1,0),
+        Font=Enum.Font.Gotham,Text=title,TextColor3=T.TextPrim,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=9},row)
+    local selLbl=New("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0.55,0,0,0),Size=UDim2.new(0.45,-38,1,0),
+        Font=Enum.Font.Gotham,Text=sel,TextColor3=T.TextSec,TextSize=12,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=9},row)
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(1,-34,0,0),Size=UDim2.fromOffset(24,1),
+        SizeConstraint=Enum.SizeConstraint.RelativeYY,
+        Font=Enum.Font.GothamBold,Text="⌄",TextColor3=T.Accent,TextSize=18,ZIndex=9},row)
+    local drop=New("Frame",{BackgroundColor3=T.Bg2,BorderSizePixel=0,Position=UDim2.fromOffset(0,48),
+        Size=UDim2.new(1,0,0,dropH),Visible=false,ZIndex=20,ClipsDescendants=false},container)
+    Corner(10,drop); Stroke(T.Sep,1,drop)
+    List(0,drop); New("UIPadding",{PaddingLeft=UDim.new(0,4),PaddingRight=UDim.new(0,4),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,4)},drop)
+    for _,opt in ipairs(opts) do
+        local isA=opt==sel
+        local ob=New("TextButton",{BackgroundColor3=isA and T.AccentDim or Color3.new(0,0,0),
+            BackgroundTransparency=isA and 0 or 1,BorderSizePixel=0,Size=UDim2.new(1,0,0,IH),
+            Font=Enum.Font.Gotham,Text=opt,TextColor3=isA and T.AccentGlow or T.TextSec,TextSize=12,ZIndex=21},drop)
+        Corner(7,ob)
+        ob.MouseEnter:Connect(function() if opt~=sel then TW(ob,AI_FAST,{BackgroundTransparency=0,BackgroundColor3=T.Bg4}) end end)
+        ob.MouseLeave:Connect(function() if opt~=sel then TW(ob,AI_FAST,{BackgroundTransparency=1}) end end)
+        ob.MouseButton1Click:Connect(function()
+            sel=opt; selLbl.Text=opt; open=false; drop.Visible=false
+            container.Size=UDim2.new(1,0,0,46)
+            if cb then Safe(cb,opt) end
+        end)
+    end
+    local hbtn=New("TextButton",{BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Text="",ZIndex=10},row)
+    hbtn.MouseEnter:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg4}) end)
+    hbtn.MouseLeave:Connect(function() TW(row,AI_FAST,{BackgroundColor3=T.Bg3}) end)
+    hbtn.MouseButton1Click:Connect(function()
+        open=not open; drop.Visible=open
+        container.Size=UDim2.new(1,0,0,open and 46+dropH+6 or 46)
+    end)
+    return container
+end
+
+-- ══════════════════════════════════════════════════════════
+--  TABS
+-- ══════════════════════════════════════════════════════════
+local Pages   = {}
+local TabBtns = {}
+local ActiveTab = "Dashboard"
+
+local TABS = {
+    {n="Dashboard", ic="⬛"},
+    {n="Combat",    ic="⚔"},
+    {n="Player",    ic="🏃"},
+    {n="Visuals",   ic="👁"},
+    {n="Teleport",  ic="📌"},
+    {n="Safety",    ic="🛡"},
+    {n="Utility",   ic="🔧"},
+    {n="Settings",  ic="⚙"},
+}
+
+local function SwitchTab(name)
+    ActiveTab = name
+    ContentTitle.Text = name
+    for n, pg in pairs(Pages) do
+        pg.Visible = (n == name)
+    end
+    for n, btn in pairs(TabBtns) do
+        local active = (n == name)
+        local ind = btn:FindFirstChild("Ind")
+        if ind then ind.Visible = active end
+        local lbl = btn:FindFirstChildOfClass("TextLabel")
+        if lbl then
+            lbl.TextColor3 = active and T.TextPrim or T.TextSec
+            lbl.Font = active and Enum.Font.GothamBold or Enum.Font.Gotham
+        end
+        TW(btn, AI_FAST, {
+            BackgroundColor3     = active and T.Bg4 or T.Bg2,
+            BackgroundTransparency = active and 0 or 1,
+        })
+    end
+    ContentScroll.CanvasPosition = Vector2.zero
+end
+
+for i, tab in ipairs(TABS) do
+    local btn = New("TextButton", {
+        Name = "Tab_"..tab.n,
+        BackgroundColor3 = tab.n=="Dashboard" and T.Bg4 or T.Bg2,
+        BackgroundTransparency = tab.n=="Dashboard" and 0 or 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1,0,0,36),
+        Text = "", LayoutOrder = i,
+    }, TabScroll)
+    Corner(9, btn)
+    local ind = New("Frame",{Name="Ind",BackgroundColor3=T.Accent,BorderSizePixel=0,
+        Position=UDim2.new(0,0,0.2,0),Size=UDim2.new(0,3,0.6,0),Visible=tab.n=="Dashboard"},btn)
+    Corner(99,ind)
+    New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-14,1,0),
+        Font=tab.n=="Dashboard" and Enum.Font.GothamBold or Enum.Font.Gotham,
+        Text=tab.ic.."  "..tab.n,
+        TextColor3=tab.n=="Dashboard" and T.TextPrim or T.TextSec,TextSize=13,
+        TextXAlignment=Enum.TextXAlignment.Left},btn)
+    TabBtns[tab.n] = btn
+
+    local page = New("Frame",{Name="Page_"..tab.n,BackgroundTransparency=0,BorderSizePixel=0,
+        Size=UDim2.new(1,0,0,0),Visible=tab.n=="Dashboard"},ContentScroll)
+    local pl = List(4,page)
+    pl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        page.Size=UDim2.new(1,0,0,pl.AbsoluteContentSize.Y)
+    end)
+    Pages[tab.n] = page
+
+    btn.MouseButton1Click:Connect(function() SwitchTab(tab.n) end)
+    btn.MouseEnter:Connect(function()
+        if ActiveTab~=tab.n then TW(btn,AI_FAST,{BackgroundTransparency=0,BackgroundColor3=T.Bg3}) end
+    end)
+    btn.MouseLeave:Connect(function()
+        if ActiveTab~=tab.n then TW(btn,AI_FAST,{BackgroundTransparency=1}) end
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════
+--  ESP STORE
+-- ══════════════════════════════════════════════════════════
+local espStore = {}
+local function clearEsp(plr)
+    local e = espStore[plr]; if not e then return end
+    if e.hl then pcall(function() e.hl:Destroy() end) end
+    if e.bb then pcall(function() e.bb:Destroy() end) end
+    espStore[plr] = nil
+end
+local function ensureEsp(plr)
+    if espStore[plr] then return espStore[plr] end
+    local e = {}
+    e.hl = New("Highlight", {
+        FillTransparency=1, OutlineTransparency=0, Enabled=false,
+        DepthMode=Enum.HighlightDepthMode.AlwaysOnTop,
+    }, EspGui)
+    e.bb = New("BillboardGui", {
+        Size=UDim2.fromOffset(200,40), AlwaysOnTop=true, Enabled=false,
+        StudsOffsetWorldSpace=Vector3.new(0,3.2,0),
+    }, EspGui)
+    e.scale = New("UIScale",{Scale=1},e.bb)
+    e.card  = New("Frame",{
+        AnchorPoint=Vector2.new(0.5,1), Position=UDim2.fromScale(0.5,1),
+        Size=UDim2.fromOffset(200,32), BackgroundColor3=T.Bg1, BackgroundTransparency=0.2,
+        BorderSizePixel=0,
+    },e.bb)
+    Corner(10,e.card)
+    New("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0.04),NumberSequenceKeypoint.new(1,0.28)
+    })},e.card)
+    e.edge = New("UIStroke",{Color=T.TextPrim,Thickness=1,Transparency=0.75,ApplyStrokeMode=Enum.ApplyStrokeMode.Border},e.card)
+    e.avatar = New("ImageLabel",{
+        AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,8,0.5,0),
+        Size=UDim2.fromOffset(22,22),BackgroundColor3=T.Bg3,BackgroundTransparency=0.25,
+        ScaleType=Enum.ScaleType.Fit,Image="",
+    },e.card)
+    Corner(6,e.avatar)
+    e.name = New("TextLabel",{
+        BackgroundTransparency=1,AnchorPoint=Vector2.new(0,0.5),
+        Position=UDim2.new(0,36,0.5,0),Size=UDim2.new(1,-110,0,15),
+        Font=Enum.Font.GothamBold,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,
+        Text="",TextColor3=Color3.fromRGB(255,255,255),
+    },e.card)
+    e.sub = New("TextLabel",{
+        BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0.5),
+        Position=UDim2.new(1,-10,0.5,0),Size=UDim2.fromOffset(70,14),
+        Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right,
+        Text="",TextColor3=T.TextSec,
+    },e.card)
+    espStore[plr] = e; return e
+end
+
+local boxStore = {}
+local function clearBox(plr)
+    local b = boxStore[plr]; if not b then return end
+    for _, l in ipairs(b) do dropDraw(l) end; boxStore[plr] = nil
+end
+local function ensureBox(plr)
+    if boxStore[plr] then return boxStore[plr] end
+    local b = {}; for i=1,4 do b[i]=newLine(1) end
+    boxStore[plr]=b; return b
+end
+
+local tracerStore = {}
+local function clearTracer(plr)
+    local t = tracerStore[plr]; if not t then return end
+    dropDraw(t); tracerStore[plr]=nil
+end
+local function ensureTracer(plr)
+    if tracerStore[plr] then return tracerStore[plr] end
+    local t = newLine(2); tracerStore[plr]=t; return t
+end
+local function tracerOrigin()
+    local vp = Camera.ViewportSize
+    local from = flags.espTracerFrom
+    if from=="Top" then return Vector2.new(vp.X*0.5,0)
+    elseif from=="Center" then return Vector2.new(vp.X*0.5,vp.Y*0.5)
+    elseif from=="Mouse" then
+        local m=UserInputService:GetMouseLocation()
+        return Vector2.new(m.X,m.Y)
+    end
+    return Vector2.new(vp.X*0.5,vp.Y)
+end
+
+bind(Players.PlayerRemoving,function(plr) clearEsp(plr); clearBox(plr); clearTracer(plr) end)
+for _, p in ipairs(KM.plrs) do if p ~= LocalPlayer then ensureEsp(p) end end
+bind(Players.PlayerAdded, function(p) task.wait(0.4); if p ~= LocalPlayer then ensureEsp(p) end end)
+
+-- ══════════════════════════════════════════════════════════
+--  COINS
+-- ══════════════════════════════════════════════════════════
+local coinCache = {}
+local coinBagFull = false
+
+local function coinTaken(d)
+    local c = d:GetAttribute("Collected"); return c==true or c=="true"
+end
+local function freshCoins()
+    local out = {}
+    local tagged = CollectionService:GetTagged("ServerCoinPart")
+    if #tagged > 0 then
+        for _, d in ipairs(tagged) do
+            if d:IsA("BasePart") and d.Parent and not coinTaken(d) then out[#out+1]=d end
+        end
+        return out
+    end
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("BasePart") and d.Parent and not coinTaken(d) and
+           (d:GetAttribute("CoinID")~=nil or d.Name=="Coin_Server") then
+            out[#out+1]=d
+        end
+    end
+    return out
+end
+
+local GameplayR = RS:WaitForChild("Remotes"):WaitForChild("Gameplay")
+local CoinCollectedR = GameplayR:FindFirstChild("CoinCollected")
+if CoinCollectedR then
+    bind(CoinCollectedR.OnClientEvent, function(_, collected, capacity)
+        if type(collected)=="number" and type(capacity)=="number" and capacity>0 and collected>=capacity then
+            coinBagFull = true
+            if flags.autoCoins then Notify("Auto Coins","Bag full — collecte stoppée","warning") end
+        end
+    end)
+end
+local CoinsStartedR = GameplayR:FindFirstChild("CoinsStarted")
+if CoinsStartedR then bind(CoinsStartedR.OnClientEvent, function() coinBagFull=false end) end
+
+for _, rn in ipairs({"TeleportToPart","RoundStart","RoundEndFade","LoadingMap","GameOver","VictoryScreen"}) do
+    local r = GameplayR:FindFirstChild(rn)
+    if r and r:IsA("RemoteEvent") then bind(r.OnClientEvent, KM.markTeleport) end
+end
+bind(LocalPlayer.CharacterAdded, KM.markTeleport)
+
+-- ══════════════════════════════════════════════════════════
+--  FLY
+-- ══════════════════════════════════════════════════════════
+local flyBV, flyBG
+local lastJumpAt = -10
+
+local function startFly()
+    local ch = myChar(); local hrp = getHRP(ch); local hum = getHum(ch)
+    if not (hrp and hum) then return end
+    hum.PlatformStand = true; KM.wantPS = true
+    flyBV = New("BodyVelocity",{MaxForce=Vector3.new(1,1,1)*9e9,P=9e4,Velocity=Vector3.zero},hrp)
+    flyBG = New("BodyGyro",{MaxTorque=Vector3.new(1,1,1)*9e9,P=9e4,CFrame=hrp.CFrame},hrp)
+end
+local function stopFly()
+    local ch = myChar(); local hum = getHum(ch)
+    if hum then hum.PlatformStand=false end; KM.wantPS=false
+    if flyBV then flyBV:Destroy();flyBV=nil end
+    if flyBG then flyBG:Destroy();flyBG=nil end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  NOCLIP
+-- ══════════════════════════════════════════════════════════
+local charParts, charPartsFor = {}, nil
+local function refreshCharParts(ch)
+    charParts = {}; charPartsFor = nil
+    if not ch then return end
+    for _, p in ipairs(ch:GetDescendants()) do
+        if p:IsA("BasePart") then charParts[#charParts+1]=p end
+    end
+    charPartsFor = ch
+end
+local function getCharParts(ch)
+    if ch ~= charPartsFor then refreshCharParts(ch) end
+    return charParts
+end
+bind(LocalPlayer.CharacterAdded, function(ch) task.defer(function() refreshCharParts(ch) end) end)
+if LocalPlayer.Character then refreshCharParts(LocalPlayer.Character) end
+
+local function uncollide(ch)
+    for _, p in ipairs(getCharParts(ch)) do
+        if p.Parent and p.CanCollide then p.CanCollide=false; KM.unclip[p]=true end
+    end
+end
+function KM.recollide(hum, force)
+    if (not force) and (flags.noclip or KM.wantNoclip) then return end
+    for p in pairs(KM.unclip) do
+        if p.Parent then p.CanCollide=true end
+    end
+    table.clear(KM.unclip)
+    if hum then pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  AIM
+-- ══════════════════════════════════════════════════════════
+local aimFov = 120
+
+local function aimCenter()
+    local m = UserInputService:GetMouseLocation(); return Vector2.new(m.X, m.Y)
+end
+local function aimGui()
+    local c = aimCenter(); local ins = GuiService:GetGuiInset()
+    return Vector2.new(c.X-ins.X, c.Y-ins.Y)
+end
+local function aimRay()
+    local c = aimCenter()
+    return Camera:ViewportPointToRay(c.X, c.Y)
+end
+
+local function fovTarget()
+    local mr = myRole()
+    local center = aimCenter(); local best, bd
+    for _, p in ipairs(KM.plrs) do
+        if p ~= LocalPlayer and alive(p) then
+            local pr = roleOf(p)
+            local enemy = (mr=="Murderer") or (isGunRole(mr) and pr=="Murderer")
+            if enemy or pr=="Murderer" then
+                local hrp = getHRP(p.Character)
+                if hrp then
+                    local v, on = Camera:WorldToViewportPoint(hrp.Position)
+                    if on and v.Z > 0 then
+                        local d = (Vector2.new(v.X,v.Y)-center).Magnitude
+                        if d <= aimFov and (not bd or d < bd) then bd,best=d,p end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function crosshairPlayerPos(radius)
+    local center = aimCenter(); local best, bd
+    for _, p in ipairs(KM.plrs) do
+        if p ~= LocalPlayer and alive(p) then
+            local hrp = getHRP(p.Character)
+            if hrp then
+                local sp = Camera:WorldToViewportPoint(hrp.Position)
+                if sp.Z > 0 then
+                    local d = (Vector2.new(sp.X,sp.Y)-center).Magnitude
+                    if d <= radius and (not bd or d < bd) then bd=d; best=p end
+                end
+            end
+        end
+    end
+    return best and (function()
+        local h = best.Character:FindFirstChild("HumanoidRootPart")
+        local part = best.Character:FindFirstChild("UpperTorso") or best.Character:FindFirstChild("Torso") or h
+        return part and part.Position
+    end)() or nil
+end
+
+-- ══════════════════════════════════════════════════════════
+--  PAGES
+-- ══════════════════════════════════════════════════════════
+
+-- PAGE: DASHBOARD
+do
+    local p = Pages["Dashboard"]
+    Section(p,"Statut Joueur")
+
+    local statsWrap = New("Frame",{BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,0,0,152)},p)
+    New("UIGridLayout",{SortOrder=Enum.SortOrder.LayoutOrder,CellSize=UDim2.new(0.5,-4,0,72),
+        CellPaddingHorizontal=UDim.new(0,4),CellPaddingVertical=UDim.new(0,4)},statsWrap)
+
+    local function StatCard(parent, icon, label, color)
+        local card = New("Frame",{BackgroundColor3=T.Bg3,BorderSizePixel=0},parent)
+        Corner(10,card)
+        local ib = New("Frame",{BackgroundColor3=color,BackgroundTransparency=0.8,BorderSizePixel=0,
+            Position=UDim2.fromOffset(10,10),Size=UDim2.fromOffset(30,30)},card)
+        Corner(8,ib)
+        New("TextLabel",{BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Font=Enum.Font.GothamBold,
+            Text=icon,TextColor3=color,TextSize=16},ib)
+        local vL = New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(48,8),
+            Size=UDim2.new(1,-58,0,24),Font=Enum.Font.GothamBold,Text="—",TextColor3=T.TextPrim,
+            TextSize=18,TextXAlignment=Enum.TextXAlignment.Left},card)
+        New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(48,34),
+            Size=UDim2.new(1,-58,0,14),Font=Enum.Font.Gotham,Text=label,TextColor3=T.TextMuted,
+            TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},card)
+        return vL
+    end
+
+    local fpsLbl   = StatCard(statsWrap,"⚡","FPS",         T.Success)
+    local pingLbl  = StatCard(statsWrap,"📡","Ping",        T.Info)
+    local hpLbl    = StatCard(statsWrap,"❤","Santé",        T.Error)
+    local speedLbl = StatCard(statsWrap,"🏃","Vitesse",     T.Warning)
+
+    Spacer(p,4); Section(p,"Mon Rôle")
+    local roleCard = New("Frame",{BackgroundColor3=T.Bg3,BorderSizePixel=0,Size=UDim2.new(1,0,0,66)},p)
+    Corner(10,roleCard)
+    local roleDot = New("Frame",{BackgroundColor3=T.TextMuted,BorderSizePixel=0,
+        Position=UDim2.new(0,14,0.5,-20),Size=UDim2.fromOffset(40,40)},roleCard)
+    Corner(99,roleDot)
+    local roleIconLbl = New("TextLabel",{BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+        Font=Enum.Font.GothamBold,Text="❓",TextSize=22},roleDot)
+    local roleNameLbl = New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(64,10),
+        Size=UDim2.new(1,-78,0,22),Font=Enum.Font.GothamBold,Text="INCONNU",TextColor3=T.TextMuted,
+        TextSize=18,TextXAlignment=Enum.TextXAlignment.Left},roleCard)
+    local roleSubLbl = New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(64,32),
+        Size=UDim2.new(1,-78,0,14),Font=Enum.Font.Gotham,Text="En attente...",
+        TextColor3=T.TextMuted,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left},roleCard)
+
+    Spacer(p,4); Section(p,"Modules Rapides")
+    local modGrid = New("Frame",{BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,0,0,76)},p)
+    New("UIGridLayout",{SortOrder=Enum.SortOrder.LayoutOrder,CellSize=UDim2.new(0.5,-4,0,36),
+        CellPaddingHorizontal=UDim.new(0,4),CellPaddingVertical=UDim.new(0,4)},modGrid)
+
+    local quickMods = {
+        {name="ESP Nametags", flag="espNames"},
+        {name="Chams ESP",    flag="espChams"},
+        {name="Fly",          flag="fly",     onToggle=function(v) if v then startFly() else stopFly() end end},
+        {name="Auto Kill",    flag="autoKill"},
+    }
+    for i, md in ipairs(quickMods) do
+        local mb = New("TextButton",{BackgroundColor3=flags[md.flag] and T.AccentDim or T.Bg3,
+            BorderSizePixel=0,LayoutOrder=i,Text="",AutoButtonColor=false},modGrid)
+        Corner(8,mb)
+        local lbl = New("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),
+            Size=UDim2.new(1,-12,1,0),Font=Enum.Font.Gotham,Text=md.name,
+            TextColor3=flags[md.flag] and T.AccentGlow or T.TextSec,TextSize=12,
+            TextXAlignment=Enum.TextXAlignment.Left},mb)
+        mb.MouseButton1Click:Connect(function()
+            flags[md.flag] = not flags[md.flag]
+            local on = flags[md.flag]
+            TW(mb,AI_FAST,{BackgroundColor3=on and T.AccentDim or T.Bg3})
+            lbl.TextColor3 = on and T.AccentGlow or T.TextSec
+            if md.onToggle then md.onToggle(on) end
+            Notify(md.name, on and "ON" or "OFF", on and "success" or "info")
+        end)
+    end
+
+    -- Dashboard loop
+    local dashT = 0
+    bind(RunService.Heartbeat, function(dt)
+        dashT = dashT + dt
+        if dashT < 0.5 or ActiveTab ~= "Dashboard" then return end
+        dashT = 0
+        fpsLbl.Text = tostring(math.floor(1/dt))
+        pcall(function()
+            local s = game:GetService("Stats")
+            local ping = math.floor(s.Network.ServerStatsItem["Data Ping"]:GetValue())
+            pingLbl.Text = ping.."ms"
+            pingLbl.TextColor3 = ping<80 and T.Success or ping<150 and T.Warning or T.Error
+        end)
+        local h = myHum()
+        if h then
+            hpLbl.Text = math.floor(h.Health).."/"..math.floor(h.MaxHealth)
+            speedLbl.Text = tostring(math.floor(h.WalkSpeed))
+        end
+        local mr = myRole()
+        local mc = roleColor(mr)
+        local micons = {Murder="🔪",Sheriff="⭐",Hero="⭐",Innocent="👤",Unknown="❓"}
+        roleNameLbl.Text = mr:upper(); roleNameLbl.TextColor3 = mc
+        roleDot.BackgroundColor3 = mc
+        roleIconLbl.Text = micons[mr] or "❓"
+        roleSubLbl.Text = "Détecté localement"
+    end)
+end
+
+-- PAGE: COMBAT
+do
+    local p = Pages["Combat"]
+    Section(p,"Auto Kill")
+    MkToggle(p,"Auto Kill","Couteau instant (murderer) ou snap-shot (sheriff)",false,function(v)
+        flags.autoKill=v; Notify("Auto Kill",v and "ON" or "OFF",v and "success" or "info")
+    end)
+    MkToggle(p,"Aimbot","Snap caméra vers l'ennemi le plus proche dans le FOV",false,function(v) flags.aimbot=v end)
+    MkToggle(p,"Silent Aim","Redirige les tirs/lancers silencieusement",false,function(v) flags.silentAim=v end)
+    MkToggle(p,"Afficher Cercle FOV",nil,false,function(v) flags.showFov=v end)
+    MkSlider(p,"FOV Rayon",40,400,120,function(v) aimFov=v end,"px")
+
+    Spacer(p,4); Section(p,"Sheriff")
+    MkToggle(p,"Tir à travers les Murs",nil,false,function(v) flags.gunWalls=v end)
+    MkToggle(p,"Auto Ramasser le Gun","Ramasse le gun dès qu'il apparaît",false,function(v) flags.autoGun=v end)
+    MkToggle(p,"Gun ESP","Surligne le gun au sol",false,function(v) flags.gunEsp=v end)
+    MkButton(p,"Ramasser Gun Maintenant",nil,false,function()
+        local h=getHRP(myChar())
+        if not h then Notify("Erreur","Pas de personnage","error"); return end
+        -- cherche le gun dans le workspace
+        for _, d in ipairs(workspace:GetDescendants()) do
+            if d.Name=="GunDrop" and d:IsA("BasePart") then
+                KM.markSelfTP()
+                h.CFrame = CFrame.new(d.Position+Vector3.new(0,2,0))
+                task.wait(0.1)
+                if typeof(firetouchinterest)=="function" then
+                    pcall(function() firetouchinterest(h,d,0); firetouchinterest(h,d,1) end)
+                end
+                Notify("Gun","Ramassé ✓","success"); return
+            end
+        end
+        Notify("Gun","Aucun gun disponible","warning")
+    end)
+
+    Spacer(p,4); Section(p,"Murderer")
+    MkToggle(p,"Couteau à travers les Murs",nil,false,function(v) flags.knifeWalls=v end)
+    MkToggle(p,"Instant Knife Throw","Lance le couteau instantanément",false,function(v) flags.instantKnife=v end)
+
+    Spacer(p,4); Section(p,"Fling Auto")
+    MkToggle(p,"Fling Auto Murderer","Fling le murderer dès qu'il est vu",false,function(v) flags.autoFlingMurd=v end)
+    MkToggle(p,"Fling Auto Sheriff","Fling le sheriff dès qu'il est vu",false,function(v) flags.autoFlingSheriff=v end)
+    MkSlider(p,"Puissance Fling",1000,50000,10000,function(v) flags.flingPower=v end)
+    MkSlider(p,"Durée Fling",1,10,1,function(v) flags.flingSeconds=v end,"s")
+end
+
+-- PAGE: PLAYER
+do
+    local p = Pages["Player"]
+    Section(p,"Mouvement")
+    MkToggle(p,"WalkSpeed Personnalisé",nil,false,function(v)
+        flags.walkSpeedOn=v
+        local h=myHum(); if h then h.WalkSpeed=v and flags.walkSpeed or 16 end
+    end)
+    MkSlider(p,"Valeur Speed",16,150,16,function(v)
+        flags.walkSpeed=v
+        if flags.walkSpeedOn then local h=myHum(); if h then h.WalkSpeed=v end end
+    end)
+    MkToggle(p,"JumpPower Personnalisé",nil,false,function(v)
+        flags.jumpPowerOn=v
+        local h=myHum(); if h then h.JumpPower=v and flags.jumpPower or 50 end
+    end)
+    MkSlider(p,"Valeur Jump",50,500,50,function(v)
+        flags.jumpPower=v
+        if flags.jumpPowerOn then local h=myHum(); if h then h.UseJumpPower=true; h.JumpPower=v end end
+    end)
+
+    Spacer(p,4); Section(p,"Mods")
+    MkToggle(p,"Fly","WASD + Space/Ctrl pour voler",false,function(v)
+        flags.fly=v
+        if v then startFly() else stopFly() end
+        Notify("Fly",v and "ON" or "OFF",v and "success" or "info")
+    end)
+    MkSlider(p,"Fly Speed",20,250,60,function(v) flags.flySpeed=v end)
+    MkToggle(p,"Noclip","Traverse les murs",false,function(v)
+        flags.noclip=v
+        if not v then KM.recollide(myHum()) end
+        Notify("Noclip",v and "ON" or "OFF")
+    end)
+    MkToggle(p,"Infinite Jump","Saute à l'infini",false,function(v) flags.infJump=v end)
+    MkToggle(p,"Débloquer Caméra","Supprime la limite de zoom",false,function(v)
+        flags.unlockCam=v
+        local orig = LocalPlayer.CameraMaxZoomDistance
+        pcall(function() LocalPlayer.CameraMaxZoomDistance=v and 10000 or orig end)
+    end)
+
+    Spacer(p,4); Section(p,"Actions")
+    MkButton(p,"Respawn","Recharge le personnage",false,function()
+        LocalPlayer:LoadCharacter(); Notify("Respawn","Fait ✓","info")
+    end)
+    MkButton(p,"Reset Vitesse/Saut","Remet WS=16 JP=50",false,function()
+        flags.walkSpeedOn=false; flags.jumpPowerOn=false
+        local h=myHum(); if h then h.WalkSpeed=16; h.UseJumpPower=true; h.JumpPower=50 end
+        Notify("Reset","Vitesse et saut réinitialisés","success")
+    end)
+end
+
+-- PAGE: VISUALS
+do
+    local p = Pages["Visuals"]
+    Section(p,"ESP Joueurs")
+    MkToggle(p,"Nametags ESP","Nom + distance au-dessus des joueurs",false,function(v)
+        flags.espNames=v
+        if not v then
+            for _, e in pairs(espStore) do if e.bb then e.bb.Enabled=false end end
+        end
+    end)
+    MkToggle(p,"Box ESP","Rectangle 2D autour des joueurs",false,function(v) flags.espBox=v end)
+    MkToggle(p,"Chams","Contour coloré visible à travers les murs",false,function(v) flags.espChams=v end)
+    MkToggle(p,"Fill Chams","Remplissage du chams",false,function(v) flags.espFill=v end)
+    MkToggle(p,"Role Tags","Affiche [M] [S] [I] avec couleur",false,function(v) flags.espRoleTags=v end)
+    MkToggle(p,"Avatars ESP","Photo de profil sur le nametag",false,function(v) flags.espAvatar=v end)
+    MkToggle(p,"Tracers","Ligne de l'écran vers le joueur",false,function(v) flags.espTracers=v end)
+    MkPicker(p,"Origine Tracers",{"Bottom","Top","Center","Mouse"},"Bottom",function(v) flags.espTracerFrom=v end)
+    MkToggle(p,"Limite Distance ESP","Masque les ESP trop loin",false,function(v) flags.espMaxDist=v and KM.espLimit or 0 end)
+    MkSlider(p,"Distance Max",25,1000,250,function(v) KM.espLimit=v; if flags.espMaxDist~=0 then flags.espMaxDist=v end end,"m")
+
+    Spacer(p,4); Section(p,"Monde")
+    MkToggle(p,"Coin ESP","Surligne les pièces non collectées",false,function(v) flags.coinEsp=v end)
+    MkToggle(p,"Trap ESP","Révèle les pièges du murderer",false,function(v) flags.trapEsp=v end)
+    MkToggle(p,"Kill Feed","Notifie chaque élimination",false,function(v) flags.killFeed=v end)
+    MkToggle(p,"Fullbright","Supprime l'obscurité",false,function(v)
+        flags.fullbright=v
+        if v then
+            pcall(function()
+                Lighting.Brightness=3; Lighting.ClockTime=14
+                Lighting.Ambient=Color3.new(1,1,1); Lighting.OutdoorAmbient=Color3.new(1,1,1)
+                Lighting.FogStart=1e6; Lighting.FogEnd=1e6
+            end)
+        end
+    end)
+    MkToggle(p,"FPS Boost","Supprime particules, ombres, effets",false,function(v)
+        flags.fpsBoost=v
+        if v then
+            pcall(function() Lighting.GlobalShadows=false end)
+            for _, ef in ipairs(Lighting:GetDescendants()) do
+                if ef:IsA("PostEffect") then ef.Enabled=false end
+            end
+        else
+            pcall(function() Lighting.GlobalShadows=true end)
+            for _, ef in ipairs(Lighting:GetDescendants()) do
+                if ef:IsA("PostEffect") then ef.Enabled=true end
+            end
+        end
+        Notify("FPS Boost",v and "ON" or "OFF")
+    end)
+    MkToggle(p,"Empreintes","Laisse des traces de pas colorées",false,function(v) flags.footsteps=v end)
+end
+
+-- PAGE: TELEPORT
+do
+    local p = Pages["Teleport"]
+    Section(p,"Joueurs")
+
+    local _tpTarget = nil
+    local plist = {"Aucun"}
+    for _, pl in ipairs(KM.plrs) do if pl~=LocalPlayer then table.insert(plist, pl.Name) end end
+    MkPicker(p,"Cible",plist,"Aucun",function(v)
+        _tpTarget = v=="Aucun" and nil or Players:FindFirstChild(v)
+        Notify("Cible",v=="Aucun" and "Désélectionné" or "→ "..v)
+    end)
+
+    MkButton(p,"Téléport vers Cible",nil,false,function()
+        local root=myRoot()
+        local tp = _tpTarget
+        if not tp then Notify("Erreur","Aucune cible sélectionnée","warning"); return end
+        local tr = tp.Character and getHRP(tp.Character)
+        if root and tr then
+            KM.markSelfTP(); root.CFrame=tr.CFrame+Vector3.new(2,2,0)
+            Notify("Téléport","→ "..(tp.DisplayName or tp.Name),"success")
+        end
+    end)
+
+    MkButton(p,"Fling Cible","Lance la cible avec la physique",false,function()
+        local tp = _tpTarget
+        if not tp then Notify("Erreur","Aucune cible","warning"); return end
+        local thr = tp.Character and getHRP(tp.Character)
+        if thr then
+            local bv = Instance.new("BodyVelocity")
+            bv.Velocity = Vector3.new(math.random(-300,300),flags.flingPower,math.random(-300,300))
+            bv.MaxForce = Vector3.new(1e9,1e9,1e9); bv.Parent = thr; Debris:AddItem(bv,0.2)
+            Notify("Fling","→ "..(tp.DisplayName or tp.Name),"success")
+        end
+    end)
+
+    Spacer(p,4); Section(p,"Pièces")
+    MkToggle(p,"Auto Collecte Pièces","Ramasse les pièces automatiquement",false,function(v)
+        flags.autoCoins=v
+        if v and coinBagFull then Notify("Auto Coins","Bag déjà plein","warning")
+        elseif v then Notify("Auto Coins","ON","success") end
+    end)
+    MkButton(p,"Téléport Pièce la Plus Proche",nil,false,function()
+        local hrp = myRoot()
+        if not hrp then Notify("Erreur","Pas de personnage","error"); return end
+        local pool = #coinCache > 0 and coinCache or freshCoins()
+        local best, bd
+        for _, c in ipairs(pool) do
+            if c.Parent and not coinTaken(c) then
+                local d=(c.Position-hrp.Position).Magnitude
+                if not bd or d<bd then bd,best=d,c end
+            end
+        end
+        if not best then Notify("Pièces","Aucune pièce disponible","warning"); return end
+        KM.markSelfTP(); hrp.CFrame=CFrame.new(best.Position+Vector3.new(0,3,0))
+        Notify("Téléport","Pièce la plus proche ✓","success")
+    end)
+
+    Spacer(p,4); Section(p,"Serveur")
+    MkButton(p,"Rejoin","Reconnecte au même serveur",false,function()
+        Notify("Rejoin","Reconnexion...","info")
+        pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId,game.JobId,LocalPlayer) end)
+    end)
+    MkButton(p,"Server Hop","Rejoint un autre serveur",false,function()
+        Notify("Server Hop","Recherche d'un serveur...","info")
+        task.spawn(function()
+            local ok, res = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(
+                    "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Desc&limit=25"
+                ))
+            end)
+            if not ok or not res or not res.data then Notify("Server Hop","Erreur réseau","error"); return end
+            for _, sv in ipairs(res.data) do
+                if sv.id and sv.id ~= game.JobId and ((sv.maxPlayers or 0)-(sv.playing or 0)) >= 1 then
+                    pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId,sv.id,LocalPlayer) end)
+                    return
+                end
+            end
+            Notify("Server Hop","Aucun serveur trouvé","warning")
+        end)
+    end)
+end
+
+-- PAGE: SAFETY
+do
+    local p = Pages["Safety"]
+    Section(p,"Protection")
+    MkToggle(p,"Anti Fling","Bloque les flings des exploiteurs",false,function(v) flags.antiFling=v end)
+    MkToggle(p,"Anti Trap","Conserve la vitesse dans les pièges",false,function(v) flags.antiTrap=v end)
+    Spacer(p,4); Section(p,"Alertes")
+    MkToggle(p,"Alerte Murderer","Notifie quand le murderer est à 50 studs",false,function(v)
+        flags.murdNotify=v
+    end)
+    MkToggle(p,"Anti AFK","Évite le kick AFK",false,function(v) flags.antiAfk=v end)
+end
+
+-- PAGE: UTILITY
+do
+    local p = Pages["Utility"]
+    Section(p,"Script")
+    MkButton(p,"Décharger KuraiMoka","Retire le script complètement",true,function()
+        Notify("KuraiMoka","Déchargement...","warning",2)
+        task.delay(0.5, function()
+            Unloaded = true
+            stopFly()
+            clearDrawn()
+            local hum = myHum()
+            KM.recollide(hum, true)
+            for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+            table.clear(conns)
+            pcall(function() SG:Destroy() end)
+            pcall(function() EspGui:Destroy() end)
+        end)
+    end)
+
+    Spacer(p,4); Section(p,"Debug")
+    MkButton(p,"Afficher Rôles","Force un scan et affiche les rôles",false,function()
+        table.clear(roleCache); table.clear(aliveCache)
+        KM.refreshTags()
+        local m=findMurderer()
+        local s = (function()
+            for _,p in ipairs(KM.plrs) do if isGunRole(roleOf(p)) then return p end end
+        end)()
+        Notify("Rôles",
+            "Murder: "..(m and (m.DisplayName or m.Name) or "?")..
+            " | Sheriff: "..(s and (s.DisplayName or s.Name) or "?"),
+            "info",6)
+    end)
+    MkButton(p,"Copy Server ID","Copie le Job ID dans le presse-papiers",false,function()
+        pcall(function() setclipboard(tostring(game.JobId)) end)
+        Notify("Clipboard","Server ID copié ✓","success")
+    end)
+end
+
+-- PAGE: SETTINGS
+do
+    local p = Pages["Settings"]
+    Section(p,"Thème")
+    MkPicker(p,"Couleur Accent",{"Rouge","Bleu","Violet","Vert","Orange","Cyan","Rose"},"Rouge",function(v)
+        local map = {
+            Rouge=Color3.fromRGB(195,32,55), Bleu=Color3.fromRGB(30,115,215),
+            Violet=Color3.fromRGB(125,40,215), Vert=Color3.fromRGB(30,185,82),
+            Orange=Color3.fromRGB(215,115,22), Cyan=Color3.fromRGB(22,185,205),
+            Rose=Color3.fromRGB(220,52,155),
+        }
+        local nc = map[v] or T.Accent
+        T.Accent = nc; T.TogOn = nc
+        TopAccent.BackgroundColor3 = nc; CloseBtn.BackgroundColor3 = nc
+        FovCircle:FindFirstChildOfClass("UIStroke").Color = nc
+        Notify("Thème","Accent → "..v,"info")
+    end)
+
+    Spacer(p,4); Section(p,"Keybind Menu")
+    MkPicker(p,"Touche Toggle",{"RightShift","RightControl","F1","F2","F3","Home","Insert"},"RightShift",function(v)
+        local map = {
+            RightShift=Enum.KeyCode.RightShift,RightControl=Enum.KeyCode.RightControl,
+            F1=Enum.KeyCode.F1,F2=Enum.KeyCode.F2,F3=Enum.KeyCode.F3,
+            Home=Enum.KeyCode.Home,Insert=Enum.KeyCode.Insert,
+        }
+        KM.menuKey = map[v] or Enum.KeyCode.RightShift
+        Notify("Keybind","Menu → "..v,"info")
+    end)
+
+    Spacer(p,4); Section(p,"Info")
+    New("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+        Font=Enum.Font.Gotham,Text="KuraiMoka v1.0 — discord.gg/kuraishop",
+        TextColor3=T.TextSec,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},p)
+    New("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+        Font=Enum.Font.Gotham,Text="Architecture inspirée de Mono MM2 par fleece",
+        TextColor3=T.TextMuted,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left},p)
+end
+
+-- ══════════════════════════════════════════════════════════
+--  RENDER LOOP
+-- ══════════════════════════════════════════════════════════
+bind(RunService.RenderStepped, function()
+    if isDead() then return end
+    local vp     = Camera.ViewportSize
+    local cx, cy = vp.X/2, vp.Y/2
+    local center = Vector2.new(cx, cy)
+
+    -- FOV
+    FovCircle.Visible = flags.showFov and (flags.aimbot or flags.silentAim)
+    if FovCircle.Visible then
+        local mp = aimGui()
+        FovCircle.Position = UDim2.fromOffset(mp.X - aimFov, mp.Y - aimFov)
+        FovCircle.Size     = UDim2.fromOffset(aimFov*2, aimFov*2)
+    end
+
+    -- Aimbot
+    if flags.aimbot then
+        local t = fovTarget()
+        if t and t.Character then
+            local part = t.Character:FindFirstChild("Head") or getHRP(t.Character)
+            if part then Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,part.Position),0.45) end
+        end
+    end
+
+    -- ESP Loop
+    local myRoot2 = myRoot()
+    for _, plr in ipairs(KM.plrs) do
+        if plr == LocalPlayer then continue end
+        local ch, _, hrp = KM.hasBody(plr)
+        local anyEsp = flags.espNames or flags.espChams or flags.espBox or flags.espTracers
+
+        if anyEsp and ch and hrp then
+            local role2 = KM.espRole(plr)
+            local col2  = roleColor(role2)
+
+            -- Chams
+            local e = ensureEsp(plr)
+            if flags.espChams then
+                e.hl.Adornee = ch; e.hl.Enabled = true
+                e.hl.OutlineColor = col2
+                e.hl.FillColor    = col2
+                e.hl.FillTransparency = flags.espFill and 0.55 or 1
+            else e.hl.Enabled = false end
+
+            -- Nametag
+            local dist = myRoot2 and math.floor((hrp.Position-myRoot2.Position).Magnitude) or 0
+            local inRange = flags.espMaxDist<=0 or dist<=flags.espMaxDist
+            if flags.espNames and inRange then
+                e.bb.Enabled = true; e.bb.Adornee = ch:FindFirstChild("Head") or hrp
+                local nm = flags.espRoleTags and (roleLabel(role2).."  "..plr.Name) or plr.Name
+                if e._nm ~= nm then e._nm=nm; e.name.Text=nm end
+                local sub = dist.."m"
+                if e._sub ~= sub then e._sub=sub; e.sub.Text=sub end
+                if e._col ~= col2 then e._col=col2; e.name.TextColor3=col2; e.edge.Color=col2 end
+                -- Avatar
+                if flags.espAvatar and e.avatar.Image=="" and os.clock()-(e._avAt or -99)>4 then
+                    e._avAt = os.clock()
+                    local uid = plr.UserId
+                    task.spawn(function()
+                        local ok, url = pcall(function()
+                            return Players:GetUserThumbnailAsync(uid,
+                                Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                        end)
+                        if ok and url and e.avatar.Parent then e.avatar.Image=url end
+                    end)
+                end
+                e.avatar.Visible = flags.espAvatar
+            else e.bb.Enabled=false end
+
+            -- Box 2D
+            if flags.espBox then
+                local bx=ensureBox(plr)
+                local topSP = Camera:WorldToViewportPoint(hrp.Position+Vector3.new(0,3.2,0))
+                local botSP = Camera:WorldToViewportPoint(hrp.Position+Vector3.new(0,-3.2,0))
+                if topSP.Z>0 and botSP.Z>0 then
+                    local h2=math.abs(botSP.Y-topSP.Y); local w2=h2*0.55
+                    local midX=(topSP.X+botSP.X)/2
+                    local x1=midX-w2/2; local y1=topSP.Y; local x2=midX+w2/2; local y2=botSP.Y
+                    local segs={{Vector2.new(x1,y1),Vector2.new(x2,y1)},{Vector2.new(x2,y1),Vector2.new(x2,y2)},
+                                {Vector2.new(x2,y2),Vector2.new(x1,y2)},{Vector2.new(x1,y2),Vector2.new(x1,y1)}}
+                    for i=1,4 do
+                        bx[i].From=segs[i][1]; bx[i].To=segs[i][2]; bx[i].Color=col2; bx[i].Visible=true
+                    end
+                else for _,l in ipairs(bx) do l.Visible=false end end
+            else clearBox(plr) end
+
+            -- Tracer
+            if flags.espTracers and inRange then
+                local tr2=ensureTracer(plr)
+                local sp=Camera:WorldToViewportPoint(hrp.Position)
+                if sp.Z>0 then
+                    tr2.From=tracerOrigin(); tr2.To=Vector2.new(sp.X,sp.Y)
+                    tr2.Color=col2; tr2.Visible=true
+                else tr2.Visible=false end
+            else clearTracer(plr) end
+        else
+            if espStore[plr] then espStore[plr].bb.Enabled=false; espStore[plr].hl.Enabled=false end
+            clearBox(plr); clearTracer(plr)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  HEARTBEAT SYSTEMS
+-- ══════════════════════════════════════════════════════════
+local th = {fly=0, coins=0, fling=0, noclip=0, stats=0}
+
+bind(RunService.Heartbeat, function(dt)
+    if isDead() then return end
+
+    -- Fly
+    if flags.fly and flyBV then
+        local hrp=myRoot()
+        if hrp then
+            local dir=Vector3.zero; local look=Camera.CFrame.LookVector; local right=Camera.CFrame.RightVector
+            if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+look end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-look end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+right end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then dir=dir-right end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
+            if os.clock()-lastJumpAt<0.25 then dir=dir+Vector3.new(0,1,0) end
+            flyBV.Velocity=(dir.Magnitude>0 and dir.Unit or Vector3.zero)*flags.flySpeed
+            flyBG.CFrame=Camera.CFrame
+        end
+    elseif not flags.fly and flyBV then
+        stopFly()
+    end
+
+    -- Walk/Jump maintain
+    local hum2 = myHum()
+    if hum2 then
+        if flags.walkSpeedOn then hum2.WalkSpeed = flags.walkSpeed end
+        if flags.jumpPowerOn  then hum2.UseJumpPower=true; hum2.JumpPower=flags.jumpPower end
+    end
+
+    -- Noclip
+    th.noclip = th.noclip + dt
+    if th.noclip >= 0.05 then
+        th.noclip = 0
+        if flags.noclip then uncollide(myChar() or Instance.new("Folder")) end
+    end
+
+    -- Auto coins
+    th.coins = th.coins + dt
+    if th.coins >= 0.12 then
+        th.coins = 0
+        if flags.autoCoins and not coinBagFull and alive(LocalPlayer) and not KM.teleporting() then
+            coinCache = freshCoins()
+            local root = myRoot()
+            if root then
+                local best, bd
+                for _, c in ipairs(coinCache) do
+                    if c.Parent and not coinTaken(c) then
+                        local d=(c.Position-root.Position).Magnitude
+                        if d<=KM.COIN_MAX_DIST and (not bd or d<bd) then bd,best=d,c end
+                    end
+                end
+                if best then
+                    uncollide(myChar())
+                    KM.markSelfTP()
+                    root.CFrame = CFrame.new(best.Position+Vector3.new(0,2,0))
+                    if typeof(firetouchinterest)=="function" then
+                        pcall(function() firetouchinterest(root,best,0); firetouchinterest(root,best,1) end)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Auto fling murderer/sheriff
+    th.fling = th.fling + dt
+    if th.fling >= 0.5 then
+        th.fling = 0
+        if (flags.autoFlingMurd or flags.autoFlingSheriff) and KM.hasBody(LocalPlayer) then
+            for _, pl in ipairs(KM.plrs) do
+                if pl~=LocalPlayer and alive(pl) then
+                    local role3 = roleOf(pl)
+                    local want = (flags.autoFlingMurd and role3=="Murderer") or
+                                 (flags.autoFlingSheriff and isGunRole(role3))
+                    if want then
+                        local hr = getHRP(pl.Character)
+                        local myhr = myRoot()
+                        if hr and myhr then
+                            local bv = Instance.new("BodyVelocity")
+                            bv.Velocity = Vector3.new(
+                                math.random(-100,100), flags.flingPower, math.random(-100,100))
+                            bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+                            bv.Parent = hr; Debris:AddItem(bv,0.2)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Murderer notify
+    if flags.murdNotify then
+        local myhrp = myRoot()
+        local m = findMurderer()
+        local mhrp = m and m~=LocalPlayer and alive(m) and getHRP(m.Character)
+        if myhrp and mhrp and (mhrp.Position-myhrp.Position).Magnitude < 50 then
+            if not KM._murdAlerted then
+                KM._murdAlerted = true
+                Notify("⚠ Murderer Proche",
+                    (m.DisplayName or m.Name).."  ·  "..
+                    math.floor((mhrp.Position-myhrp.Position).Magnitude).."m",
+                    "error",4)
+                task.delay(6, function() KM._murdAlerted=nil end)
+            end
+        end
+    end
+
+    -- Anti AFK
+    if flags.antiAfk then
+        local VU; pcall(function() VU=game:GetService("VirtualUser") end)
+        if VU then pcall(function() VU:CaptureController(); VU:ClickButton2(Vector2.new()) end) end
+    end
+end)
+
+bind(UserInputService.JumpRequest, function()
+    lastJumpAt = os.clock()
+    if flags.infJump then
+        local hum3 = myHum()
+        if hum3 then hum3:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- Coin ESP
+task.spawn(function()
+    while not isDead() do
+        if flags.coinEsp then
+            coinCache = freshCoins()
+            -- Highlight coins (réutilise instances)
+            if not KM._coinHls then KM._coinHls = {} end
+            local seen = {}
+            for _, c in ipairs(coinCache) do
+                seen[c] = true
+                if not KM._coinHls[c] then
+                    KM._coinHls[c] = New("Highlight",{
+                        Adornee=c,FillColor=Color3.fromRGB(255,210,55),FillTransparency=0.25,
+                        OutlineColor=Color3.fromRGB(255,240,160),OutlineTransparency=0,
+                        DepthMode=Enum.HighlightDepthMode.AlwaysOnTop,
+                    },EspGui)
+                end
+            end
+            for coin, hl in pairs(KM._coinHls) do
+                if not seen[coin] or not coin.Parent then
+                    pcall(function() hl:Destroy() end); KM._coinHls[coin]=nil
+                end
+            end
+            task.wait(0.2)
+        else
+            if KM._coinHls then
+                for _, hl in pairs(KM._coinHls) do pcall(function() hl:Destroy() end) end
+                KM._coinHls = nil
+            end
+            task.wait(1)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  RESPAWN
+-- ══════════════════════════════════════════════════════════
+local function OnChar(char)
+    task.wait(0.7)
+    local hum4 = getHum(char); if not hum4 then return end
+    if flags.walkSpeedOn then hum4.WalkSpeed = flags.walkSpeed end
+    if flags.jumpPowerOn then hum4.UseJumpPower=true; hum4.JumpPower=flags.jumpPower end
+    if flags.fly then task.delay(0.5, function() startFly() end) end
+    refreshCharParts(char)
+    for _, pp in ipairs(KM.plrs) do
+        if pp~=LocalPlayer and not espStore[pp] then ensureEsp(pp) end
+    end
+    table.clear(roleCache); table.clear(aliveCache)
+end
+bind(LocalPlayer.CharacterAdded, OnChar)
+if LocalPlayer.Character then task.spawn(OnChar, LocalPlayer.Character) end
+
+-- ══════════════════════════════════════════════════════════
+--  KEYBIND MENU
+-- ══════════════════════════════════════════════════════════
+KM.menuKey = Enum.KeyCode.RightShift
+bind(UserInputService.InputBegan, function(inp, gp)
+    if gp or isDead() then return end
+    if inp.KeyCode == KM.menuKey then
+        MenuOpen = not MenuOpen
+        Win.Visible = MenuOpen
+        if MenuOpen then
+            Win.Size = UDim2.fromOffset(WIN_W,0)
+            TW(Win, AI_SPRING, {Size=UDim2.fromOffset(WIN_W,WIN_H)})
+        end
+    end
+end)
+
+-- Bouton "K" quand fermé
+local OpenBtn = New("TextButton",{
+    Name="KM_OpenBtn",BackgroundColor3=T.Accent,BorderSizePixel=0,
+    Position=UDim2.fromOffset(8,200),Size=UDim2.fromOffset(36,36),
+    Font=Enum.Font.GothamBlack,Text="K",TextColor3=T.TextPrim,TextSize=17,
+    Visible=false,AutoButtonColor=false,
+},SG)
+Corner(99,OpenBtn)
+Stroke(T.Accent,1.5,OpenBtn)
+Win:GetPropertyChangedSignal("Visible"):Connect(function() OpenBtn.Visible=not Win.Visible end)
+OpenBtn.MouseEnter:Connect(function() TW(OpenBtn,AI_FAST,{BackgroundColor3=T.AccentGlow}) end)
+OpenBtn.MouseLeave:Connect(function() TW(OpenBtn,AI_FAST,{BackgroundColor3=T.Accent}) end)
+OpenBtn.MouseButton1Click:Connect(function()
+    MenuOpen=true; Win.Visible=true
+    Win.Size=UDim2.fromOffset(WIN_W,0)
+    TW(Win,AI_SPRING,{Size=UDim2.fromOffset(WIN_W,WIN_H)})
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  GENV UNLOAD
+-- ══════════════════════════════════════════════════════════
+if GENV then
+    GENV.KURAIMOKA_Unload = function()
+        if Unloaded then return end
+        Unloaded = true
+        stopFly()
+        clearDrawn()
+        KM.recollide(myHum(), true)
+        for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+        table.clear(conns)
+        pcall(function() SG:Destroy() end)
+        pcall(function() EspGui:Destroy() end)
+        GENV.KURAIMOKA_Unload = nil
+    end
+end
+
+-- ══════════════════════════════════════════════════════════
+--  STARTUP ANIMATION + NOTIF
+-- ══════════════════════════════════════════════════════════
+Win.Size               = UDim2.fromOffset(WIN_W,0)
+Win.BackgroundTransparency = 1
+task.spawn(function()
+    TW(Win, AI_SPRING, {Size=UDim2.fromOffset(WIN_W,WIN_H), BackgroundTransparency=0})
+end)
+task.wait(1.1)
+Notify("KuraiMoka chargé ✓",
+    "RightShift pour toggle | discord.gg/kuraishop",
+    "success", 5)
+
+-- ══════════════════════════════════════════════════════════
+--  FIN KURAIMOKA v1.0
+-- ══════════════════════════════════════════════════════════
