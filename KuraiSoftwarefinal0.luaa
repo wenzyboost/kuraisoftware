@@ -1,498 +1,279 @@
--- [[ AR-AI UNIVERSAL CHEAT v1.0 ]]
--- Compatible : Delta Executor / Medium Executor
--- Features   : ESP | Silent Aim | Aimbot | Kill All | Wall Shoot | Animated Menu
+-- [[ AR-AI UNIVERSAL CHEAT v2.0 — Medium Fixed ]]
 
-local Players       = game:GetService("Players")
-local RunService    = game:GetService("RunService")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService  = game:GetService("TweenService")
-local Camera        = workspace.CurrentCamera
-local LocalPlayer   = Players.LocalPlayer
+local TweenService     = game:GetService("TweenService")
+local Camera           = workspace.CurrentCamera
+local LocalPlayer      = Players.LocalPlayer
 
--- ══════════════════════════════
---          CONFIG
--- ══════════════════════════════
 local Config = {
-    ESP = {
-        Enabled       = true,
-        BoxColor      = Color3.fromRGB(255, 50, 50),
-        NameColor     = Color3.fromRGB(255, 255, 255),
-        TracerColor   = Color3.fromRGB(255, 80, 0),
-        MaxDistance   = 1000,
-    },
-    Aimbot = {
-        Enabled       = true,
-        FOV           = 180,
-        SmoothFactor  = 0.08,
-        TargetPart    = "Head",
-        Prediction    = true,
-    },
-    SilentAim = {
-        Enabled       = true,
-        Hitpart       = "Head",
-    },
-    KillAll = {
-        Enabled       = false,
-    },
-    WallShoot = {
-        Enabled       = true,
-    },
+    ESP       = { Enabled = true,  BoxColor = Color3.fromRGB(255,50,50), NameColor = Color3.fromRGB(255,255,255), TracerColor = Color3.fromRGB(255,80,0), MaxDistance = 1000 },
+    Aimbot    = { Enabled = true,  FOV = 180, SmoothFactor = 0.08, Prediction = true },
+    SilentAim = { Enabled = true,  Hitpart = "Head" },
+    KillAll   = { Enabled = false },
+    WallShoot = { Enabled = true },
 }
 
--- ══════════════════════════════
---        UTILITY FUNCTIONS
--- ══════════════════════════════
-
-local function getCharacter(player)
-    return player.Character
+-- ══ UTILS ══
+local function getChar(p)   return p.Character end
+local function getRoot(p)   local c=getChar(p) return c and c:FindFirstChild("HumanoidRootPart") end
+local function getHead(p)   local c=getChar(p) return c and c:FindFirstChild("Head") end
+local function getHum(p)    local c=getChar(p) return c and c:FindFirstChildOfClass("Humanoid") end
+local function isAlive(p)   local h=getHum(p)  return h and h.Health > 0 end
+local function toScreen(pos)
+    local s, on = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(s.X, s.Y), on
 end
-
-local function getRootPart(player)
-    local char = getCharacter(player)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHead(player)
-    local char = getCharacter(player)
-    return char and char:FindFirstChild("Head")
-end
-
-local function getHumanoid(player)
-    local char = getCharacter(player)
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
-
-local function isAlive(player)
-    local hum = getHumanoid(player)
-    return hum and hum.Health > 0
-end
-
-local function worldToViewport(position)
-    local screenPos, onScreen = Camera:WorldToViewportPoint(position)
-    return Vector2.new(screenPos.X, screenPos.Y), onScreen
-end
-
-local function getClosestPlayer()
-    local closest, closestDist = nil, Config.Aimbot.FOV
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and isAlive(player) then
-            local head = getHead(player)
-            if head then
-                local screenPos, onScreen = worldToViewport(head.Position)
-                if onScreen then
-                    local dist = (center - screenPos).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = player
-                    end
+local function closest()
+    local best, bestD = nil, Config.Aimbot.FOV
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and isAlive(p) then
+            local h = getHead(p)
+            if h then
+                local sp, on = toScreen(h.Position)
+                if on then
+                    local d = (center - sp).Magnitude
+                    if d < bestD then bestD=d; best=p end
                 end
             end
         end
     end
-    return closest
+    return best
 end
 
--- ══════════════════════════════
---            ESP
--- ══════════════════════════════
+-- ══ ESP ══
+local ESPObj = {}
+local function makeESP(p)
+    local box       = Drawing.new("Square")
+    box.Visible     = false; box.Color = Config.ESP.BoxColor
+    box.Thickness   = 1.5;   box.Filled = false; box.Transparency = 1
 
-local ESPObjects = {}
+    local name      = Drawing.new("Text")
+    name.Visible    = false; name.Color = Config.ESP.NameColor
+    name.Size       = 14;    name.Center = true
+    name.Outline    = true;  name.OutlineColor = Color3.fromRGB(0,0,0)
 
-local function createESP(player)
-    local folder = Instance.new("Folder", game.CoreGui)
-    folder.Name  = "ESP_" .. player.Name
+    local tracer    = Drawing.new("Line")
+    tracer.Visible  = false; tracer.Color = Config.ESP.TracerColor; tracer.Thickness = 1
 
-    -- Box
-    local box = Drawing.new("Square")
-    box.Visible     = false
-    box.Color        = Config.ESP.BoxColor
-    box.Thickness    = 1.5
-    box.Filled       = false
-    box.Transparency = 1
-
-    -- Name
-    local nameLabel = Drawing.new("Text")
-    nameLabel.Visible    = false
-    nameLabel.Color      = Config.ESP.NameColor
-    nameLabel.Size       = 14
-    nameLabel.Center     = true
-    nameLabel.Outline    = true
-    nameLabel.OutlineColor = Color3.fromRGB(0,0,0)
-
-    -- Tracer
-    local tracer = Drawing.new("Line")
-    tracer.Visible    = false
-    tracer.Color      = Config.ESP.TracerColor
-    tracer.Thickness  = 1
-
-    ESPObjects[player] = {box = box, nameLabel = nameLabel, tracer = tracer, folder = folder}
+    ESPObj[p] = {box=box, name=name, tracer=tracer}
 end
-
-local function removeESP(player)
-    if ESPObjects[player] then
-        for _, obj in pairs(ESPObjects[player]) do
-            if typeof(obj) ~= "Instance" then
-                pcall(function() obj:Remove() end)
-            end
-        end
-        pcall(function() ESPObjects[player].folder:Destroy() end)
-        ESPObjects[player] = nil
+local function killESP(p)
+    if ESPObj[p] then
+        for _, o in pairs(ESPObj[p]) do pcall(function() o:Remove() end) end
+        ESPObj[p] = nil
     end
 end
-
 local function updateESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if not ESPObjects[player] then createESP(player) end
-
-        local objs = ESPObjects[player]
-        if not Config.ESP.Enabled or not isAlive(player) then
-            objs.box.Visible      = false
-            objs.nameLabel.Visible = false
-            objs.tracer.Visible   = false
-            continue
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        if not ESPObj[p] then makeESP(p) end
+        local o = ESPObj[p]
+        if not Config.ESP.Enabled or not isAlive(p) then
+            o.box.Visible=false; o.name.Visible=false; o.tracer.Visible=false; continue
         end
-
-        local root = getRootPart(player)
-        local head = getHead(player)
+        local root, head = getRoot(p), getHead(p)
         if not root or not head then continue end
-
         local dist = (Camera.CFrame.Position - root.Position).Magnitude
         if dist > Config.ESP.MaxDistance then
-            objs.box.Visible = false
-            objs.nameLabel.Visible = false
-            objs.tracer.Visible = false
-            continue
+            o.box.Visible=false; o.name.Visible=false; o.tracer.Visible=false; continue
         end
-
-        -- Box calc (top / bottom of character)
-        local topPos,    topOnScreen    = worldToViewport(head.Position + Vector3.new(0, 1.2, 0))
-        local bottomPos, bottomOnScreen = worldToViewport(root.Position - Vector3.new(0, 3.2, 0))
-
-        if topOnScreen and bottomOnScreen then
-            local height = math.abs(bottomPos.Y - topPos.Y)
-            local width  = height * 0.45
-
-            objs.box.Visible  = true
-            objs.box.Size     = Vector2.new(width, height)
-            objs.box.Position = Vector2.new(topPos.X - width / 2, topPos.Y)
-
-            objs.nameLabel.Visible   = true
-            objs.nameLabel.Text      = player.Name .. " [" .. math.floor(dist) .. "m]"
-            objs.nameLabel.Position  = Vector2.new(topPos.X, topPos.Y - 16)
-
-            local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-            objs.tracer.Visible = true
-            objs.tracer.From    = center
-            objs.tracer.To      = Vector2.new(bottomPos.X, bottomPos.Y)
+        local top, topOn    = toScreen(head.Position + Vector3.new(0,1.2,0))
+        local bot, botOn    = toScreen(root.Position - Vector3.new(0,3.2,0))
+        if topOn and botOn then
+            local h = math.abs(bot.Y - top.Y)
+            local w = h * 0.45
+            o.box.Visible=true; o.box.Size=Vector2.new(w,h); o.box.Position=Vector2.new(top.X-w/2, top.Y)
+            o.name.Visible=true; o.name.Text=p.Name.." ["..math.floor(dist).."m]"; o.name.Position=Vector2.new(top.X, top.Y-16)
+            local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+            o.tracer.Visible=true; o.tracer.From=center; o.tracer.To=Vector2.new(bot.X,bot.Y)
         else
-            objs.box.Visible      = false
-            objs.nameLabel.Visible = false
-            objs.tracer.Visible   = false
+            o.box.Visible=false; o.name.Visible=false; o.tracer.Visible=false
         end
     end
 end
+Players.PlayerRemoving:Connect(killESP)
 
-Players.PlayerRemoving:Connect(removeESP)
-
--- ══════════════════════════════
---           AIMBOT
--- ══════════════════════════════
-
+-- ══ AIMBOT ══
 RunService.RenderStepped:Connect(function()
     updateESP()
-
     if not Config.Aimbot.Enabled then return end
-    local target = getClosestPlayer()
-    if not target then return end
-    local head = getHead(target)
-    if not head then return end
-
-    local targetPos = head.Position
+    local t = closest()
+    if not t then return end
+    local h = getHead(t)
+    if not h then return end
+    local pos = h.Position
     if Config.Aimbot.Prediction then
-        local velocity = head.AssemblyLinearVelocity or Vector3.zero
-        targetPos = targetPos + velocity * 0.07
+        local vel = h.AssemblyLinearVelocity or Vector3.zero
+        pos = pos + vel * 0.07
     end
-
-    local currentCF = Camera.CFrame
-    local targetCF  = CFrame.new(currentCF.Position, targetPos)
-    Camera.CFrame   = currentCF:Lerp(targetCF, Config.Aimbot.SmoothFactor)
+    Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, pos), Config.Aimbot.SmoothFactor)
 end)
 
--- ══════════════════════════════
---         SILENT AIM
--- ══════════════════════════════
-
+-- ══ SILENT AIM — VERSION FIXÉE (pas de flood) ══
+-- Au lieu du __newindex global (qui intercepte tout Roblox),
+-- on hook directement la fonction FireServer des outils
 if Config.SilentAim.Enabled then
     local mt = getrawmetatable(game)
-    local old_index = mt.__index
     setreadonly(mt, false)
-    mt.__newindex = function(t, k, v)
-        if k == "CFrame" and t:IsA("BasePart") then
-            local target = getClosestPlayer()
-            if target then
-                local part = getHead(target)
-                if part then
-                    return rawset(t, k, CFrame.new(part.Position))
+    local old_namecall = mt.__namecall
+    mt.__namecall = function(self, ...)
+        local method = getnamecallmethod()
+        -- On intercepte seulement FireServer sur RemoteEvent (tir)
+        if method == "FireServer" and self:IsA("RemoteEvent") then
+            local t = closest()
+            if t then
+                local hp = getHead(t)
+                if hp then
+                    local args = {...}
+                    -- Remplace le CFrame/position du tir par la tête de la cible
+                    for i, v in ipairs(args) do
+                        if typeof(v) == "CFrame" then
+                            args[i] = CFrame.new(hp.Position)
+                        elseif typeof(v) == "Vector3" then
+                            args[i] = hp.Position
+                        end
+                    end
+                    return old_namecall(self, table.unpack(args))
                 end
             end
         end
-        return rawset(t, k, v)
+        return old_namecall(self, ...)
     end
     setreadonly(mt, true)
 end
 
--- ══════════════════════════════
---        KILL ALL (AoE)
--- ══════════════════════════════
-
-local function killAll()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and isAlive(player) then
-            local hum = getHumanoid(player)
-            if hum then
-                -- via remote simulation
-                pcall(function()
-                    hum.Health = 0
-                end)
-                -- fallback tool hit
-                pcall(function()
-                    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                    if tool and tool:FindFirstChild("Handle") then
-                        local args = {
-                            [1] = hum,
-                            [2] = tool.Handle.CFrame
-                        }
-                        tool.RemoteFunction:InvokeServer(unpack(args))
-                    end
-                end)
-            end
-        end
-    end
-end
-
--- ══════════════════════════════
---        WALL SHOOT
--- ══════════════════════════════
--- Disables hit detection collision so bullets pass walls
+-- ══ WALL SHOOT ══
 if Config.WallShoot.Enabled then
-    local ph = game:GetService("PhysicsService")
-    pcall(function()
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local char = player.Character
-                if char then
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
+    local function disableCollide(char)
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
         end
-    end)
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then disableCollide(p.Character) end
+        p.CharacterAdded:Connect(disableCollide)
+    end
     Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function(char)
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
+        p.CharacterAdded:Connect(disableCollide)
+    end)
+end
+
+-- ══ KILL ALL ══
+local function killAll()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and isAlive(p) then
+            local h = getHum(p)
+            if h then
+                pcall(function() h.Health = 0 end)
+                pcall(function()
+                    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                    if tool and tool:FindFirstChild("Handle") then
+                        local re = tool:FindFirstChildOfClass("RemoteEvent")
+                        if re then re:FireServer(h, tool.Handle.CFrame) end
+                    end
+                end)
             end
-        end)
-    end)
-end
-
--- ══════════════════════════════
---     ANIMATED MENU (GUI)
--- ══════════════════════════════
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name          = "AR_Menu"
-ScreenGui.ResetOnSpawn  = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent         = game.CoreGui
-
--- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name            = "MainFrame"
-MainFrame.Size            = UDim2.new(0, 320, 0, 380)
-MainFrame.Position        = UDim2.new(0.5, -160, 0.5, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18)
-MainFrame.BorderSizePixel = 0
-MainFrame.Parent          = ScreenGui
-
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
-
--- Glow stroke
-local stroke = Instance.new("UIStroke", MainFrame)
-stroke.Color     = Color3.fromRGB(180, 0, 255)
-stroke.Thickness = 2
-
--- Animate glow stroke
-task.spawn(function()
-    local t = 0
-    while task.wait(0.03) do
-        t = t + 0.05
-        local r = math.abs(math.sin(t)) * 255
-        local b = math.abs(math.cos(t)) * 255
-        stroke.Color = Color3.fromRGB(r, 0, b)
-    end
-end)
-
--- Title
-local Title = Instance.new("TextLabel")
-Title.Size              = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3  = Color3.fromRGB(20, 0, 40)
-Title.TextColor3        = Color3.fromRGB(220, 100, 255)
-Title.Font              = Enum.Font.GothamBold
-Title.TextSize          = 16
-Title.Text              = "⚡ AR-AI CHEAT v1.0 ⚡"
-Title.Parent            = MainFrame
-Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
-
--- Draggable
-local dragging, dragInput, dragStart, startPos
-Title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging  = true
-        dragStart = input.Position
-        startPos  = MainFrame.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-
--- Layout
-local List = Instance.new("UIListLayout")
-List.SortOrder    = Enum.SortOrder.LayoutOrder
-List.Padding      = UDim.new(0, 6)
-List.Parent       = MainFrame
-
-local Padding = Instance.new("UIPadding", MainFrame)
-Padding.PaddingTop    = UDim.new(0, 48)
-Padding.PaddingLeft   = UDim.new(0, 10)
-Padding.PaddingRight  = UDim.new(0, 10)
-Padding.PaddingBottom = UDim.new(0, 10)
-
--- Toggle builder
-local function makeToggle(labelText, configTable, configKey)
-    local btn = Instance.new("TextButton")
-    btn.Size             = UDim2.new(1, 0, 0, 38)
-    btn.BackgroundColor3 = configTable[configKey]
-        and Color3.fromRGB(60, 0, 100)
-        or  Color3.fromRGB(25, 25, 35)
-    btn.TextColor3       = Color3.fromRGB(255, 255, 255)
-    btn.Font             = Enum.Font.Gotham
-    btn.TextSize         = 14
-    btn.Text             = (configTable[configKey] and "✅ " or "❌ ") .. labelText
-    btn.AutoButtonColor  = false
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.Parent           = MainFrame
-
-    btn.MouseButton1Click:Connect(function()
-        configTable[configKey] = not configTable[configKey]
-        btn.Text             = (configTable[configKey] and "✅ " or "❌ ") .. labelText
-        btn.BackgroundColor3 = configTable[configKey]
-            and Color3.fromRGB(60, 0, 100)
-            or  Color3.fromRGB(25, 25, 35)
-
-        -- Anim
-        local tween = TweenService:Create(btn,
-            TweenInfo.new(0.15, Enum.EasingStyle.Bounce),
-            {BackgroundTransparency = 0.4}
-        )
-        tween:Play()
-        tween.Completed:Connect(function()
-            TweenService:Create(btn,
-                TweenInfo.new(0.1),
-                {BackgroundTransparency = 0}
-            ):Play()
-        end)
-    end)
-    return btn
-end
-
-makeToggle("ESP",          Config.ESP,       "Enabled")
-makeToggle("Aimbot",       Config.Aimbot,    "Enabled")
-makeToggle("Silent Aim",   Config.SilentAim, "Enabled")
-makeToggle("Wall Shoot",   Config.WallShoot, "Enabled")
-makeToggle("Kill All",     Config.KillAll,   "Enabled")
-
--- Kill All Button
-local killBtn = Instance.new("TextButton")
-killBtn.Size             = UDim2.new(1, 0, 0, 42)
-killBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-killBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
-killBtn.Font             = Enum.Font.GothamBold
-killBtn.TextSize         = 15
-killBtn.Text             = "💀 EXECUTE KILL ALL 💀"
-killBtn.AutoButtonColor  = false
-Instance.new("UICorner", killBtn).CornerRadius = UDim.new(0, 8)
-killBtn.Parent           = MainFrame
-
-killBtn.MouseButton1Click:Connect(function()
-    -- Shoot animation on ground
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if root then
-        for i = 1, 8 do
-            task.wait(0.05)
-            local part = Instance.new("Part")
-            part.Size         = Vector3.new(0.2, 0.2, 0.2)
-            part.Anchored     = true
-            part.CanCollide   = false
-            part.Material     = Enum.Material.Neon
-            part.Color        = Color3.fromRGB(255, math.random(0,80), 0)
-            part.CFrame       = root.CFrame * CFrame.new(
-                math.random(-5,5), 0, math.random(-5,5)
-            )
-            part.Parent       = workspace
-            TweenService:Create(part,
-                TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                {Size = Vector3.new(3,0.1,3), Transparency = 1}
-            ):Play()
-            game:GetService("Debris"):AddItem(part, 0.5)
         end
     end
+end
 
-    killAll()
+-- ══ GUI ANIMÉ ══
+local SG = Instance.new("ScreenGui")
+SG.Name="AR_Menu"; SG.ResetOnSpawn=false; SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; SG.Parent=game.CoreGui
 
-    -- Button flash
-    TweenService:Create(killBtn,
-        TweenInfo.new(0.1),
-        {BackgroundColor3 = Color3.fromRGB(255, 80, 0)}
-    ):Play()
-    task.wait(0.2)
-    TweenService:Create(killBtn,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(180, 0, 0)}
-    ):Play()
-end)
+local MF = Instance.new("Frame")
+MF.Size=UDim2.new(0,320,0,390); MF.Position=UDim2.new(0.5,-160,-1,0)
+MF.BackgroundColor3=Color3.fromRGB(10,10,18); MF.BorderSizePixel=0; MF.Parent=SG
+Instance.new("UICorner",MF).CornerRadius=UDim.new(0,12)
 
--- Toggle menu visibility : RightShift
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
-        MainFrame.Visible = not MainFrame.Visible
+local stroke=Instance.new("UIStroke",MF); stroke.Color=Color3.fromRGB(180,0,255); stroke.Thickness=2
+task.spawn(function()
+    local t=0
+    while task.wait(0.03) do
+        t=t+0.05
+        stroke.Color=Color3.fromRGB(math.abs(math.sin(t))*255, 0, math.abs(math.cos(t))*255)
     end
 end)
 
--- Entrance animation
-MainFrame.Position = UDim2.new(0.5, -160, -1, 0)
-TweenService:Create(MainFrame,
-    TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    {Position = UDim2.new(0.5, -160, 0.5, -190)}
-):Play()
+local Title=Instance.new("TextLabel")
+Title.Size=UDim2.new(1,0,0,40); Title.BackgroundColor3=Color3.fromRGB(20,0,40)
+Title.TextColor3=Color3.fromRGB(220,100,255); Title.Font=Enum.Font.GothamBold
+Title.TextSize=16; Title.Text="⚡ AR-AI CHEAT v2.0 ⚡"; Title.Parent=MF
+Instance.new("UICorner",Title).CornerRadius=UDim.new(0,10)
 
-print("[AR-AI] Cheat loaded. RightShift = toggle menu.")
+-- Drag
+local drag,ds,sp=false,nil,nil
+Title.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true;ds=i.Position;sp=MF.Position end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if drag and i.UserInputType==Enum.UserInputType.MouseMovement then
+        local d=i.Position-ds
+        MF.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+end)
+
+local List=Instance.new("UIListLayout"); List.SortOrder=Enum.SortOrder.LayoutOrder; List.Padding=UDim.new(0,6); List.Parent=MF
+local Pad=Instance.new("UIPadding",MF)
+Pad.PaddingTop=UDim.new(0,48); Pad.PaddingLeft=UDim.new(0,10); Pad.PaddingRight=UDim.new(0,10); Pad.PaddingBottom=UDim.new(0,10)
+
+local function toggle(label, cfg, key)
+    local b=Instance.new("TextButton")
+    b.Size=UDim2.new(1,0,0,38)
+    b.BackgroundColor3=cfg[key] and Color3.fromRGB(60,0,100) or Color3.fromRGB(25,25,35)
+    b.TextColor3=Color3.fromRGB(255,255,255); b.Font=Enum.Font.Gotham; b.TextSize=14
+    b.Text=(cfg[key] and "✅ " or "❌ ")..label; b.AutoButtonColor=false
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,8); b.Parent=MF
+    b.MouseButton1Click:Connect(function()
+        cfg[key]=not cfg[key]
+        b.Text=(cfg[key] and "✅ " or "❌ ")..label
+        b.BackgroundColor3=cfg[key] and Color3.fromRGB(60,0,100) or Color3.fromRGB(25,25,35)
+        local tw=TweenService:Create(b,TweenInfo.new(0.15,Enum.EasingStyle.Bounce),{BackgroundTransparency=0.4})
+        tw:Play(); tw.Completed:Connect(function() TweenService:Create(b,TweenInfo.new(0.1),{BackgroundTransparency=0}):Play() end)
+    end)
+end
+
+toggle("ESP",          Config.ESP,       "Enabled")
+toggle("Aimbot",       Config.Aimbot,    "Enabled")
+toggle("Silent Aim",   Config.SilentAim, "Enabled")
+toggle("Wall Shoot",   Config.WallShoot, "Enabled")
+toggle("Kill All",     Config.KillAll,   "Enabled")
+
+local kb=Instance.new("TextButton")
+kb.Size=UDim2.new(1,0,0,42); kb.BackgroundColor3=Color3.fromRGB(180,0,0)
+kb.TextColor3=Color3.fromRGB(255,255,255); kb.Font=Enum.Font.GothamBold
+kb.TextSize=15; kb.Text="💀 EXECUTE KILL ALL 💀"; kb.AutoButtonColor=false
+Instance.new("UICorner",kb).CornerRadius=UDim.new(0,8); kb.Parent=MF
+
+kb.MouseButton1Click:Connect(function()
+    local root=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        for i=1,8 do
+            task.wait(0.05)
+            local pt=Instance.new("Part")
+            pt.Size=Vector3.new(0.2,0.2,0.2); pt.Anchored=true; pt.CanCollide=false
+            pt.Material=Enum.Material.Neon; pt.Color=Color3.fromRGB(255,math.random(0,80),0)
+            pt.CFrame=root.CFrame*CFrame.new(math.random(-5,5),0,math.random(-5,5)); pt.Parent=workspace
+            TweenService:Create(pt,TweenInfo.new(0.4,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(3,0.1,3),Transparency=1}):Play()
+            game:GetService("Debris"):AddItem(pt,0.5)
+        end
+    end
+    killAll()
+    TweenService:Create(kb,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(255,80,0)}):Play()
+    task.wait(0.2)
+    TweenService:Create(kb,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(180,0,0)}):Play()
+end)
+
+UserInputService.InputBegan:Connect(function(i,gpe)
+    if not gpe and i.KeyCode==Enum.KeyCode.RightShift then MF.Visible=not MF.Visible end
+end)
+
+-- Entrance anim
+TweenService:Create(MF,TweenInfo.new(0.6,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=UDim2.new(0.5,-160,0.5,-195)}):Play()
+print("[AR-AI v2.0] loaded. RightShift = menu.")
