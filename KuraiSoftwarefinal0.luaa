@@ -1,4 +1,4 @@
--- [[ AR-AI v3.0 — Arena Deagle Optimized ]]
+-- [[ AR-AI v4.0 — Stable, No Hook, Arena Deagle ]]
 -- Medium Executor | Toggle: LeftCtrl
 
 local Players          = game:GetService("Players")
@@ -8,36 +8,22 @@ local TweenService     = game:GetService("TweenService")
 local Camera           = workspace.CurrentCamera
 local LocalPlayer      = Players.LocalPlayer
 
--- ══════════════════════════════
---           CONFIG
--- ══════════════════════════════
 local Config = {
-    ESP       = { Enabled = true,  MaxDist = 1500,
-                  BoxCol = Color3.fromRGB(255,50,50),
-                  NameCol = Color3.fromRGB(255,255,255),
-                  TracerCol = Color3.fromRGB(255,120,0) },
-    Aimbot    = { Enabled = true,  FOV = 250, Smooth = 0.12, Predict = true },
-    SilentAim = { Enabled = true },
-    WallShoot = { Enabled = true },
-    KillAll   = { Enabled = false },
+    ESP    = { Enabled = true,  MaxDist = 1500 },
+    Aimbot = { Enabled = true,  FOV = 200, Smooth = 0.15, Predict = true },
 }
 
--- ══════════════════════════════
---           UTILS
--- ══════════════════════════════
-local function getChar(p)
-    return p.Character
-end
-local function getRoot(p)
-    local c = getChar(p)
-    return c and c:FindFirstChild("HumanoidRootPart")
-end
+-- ══ UTILS ══
 local function getHead(p)
-    local c = getChar(p)
+    local c = p.Character
     return c and c:FindFirstChild("Head")
 end
+local function getRoot(p)
+    local c = p.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
 local function getHum(p)
-    local c = getChar(p)
+    local c = p.Character
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 local function alive(p)
@@ -48,23 +34,17 @@ local function toVP(pos)
     local s, on = Camera:WorldToViewportPoint(pos)
     return Vector2.new(s.X, s.Y), on
 end
-local function getCenter()
-    return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-end
-local function getBestTarget()
-    local best, bestDist = nil, Config.Aimbot.FOV
-    local center = getCenter()
+local function getBest()
+    local best, bestD = nil, Config.Aimbot.FOV
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and alive(p) then
-            local head = getHead(p)
-            if head then
-                local sp, on = toVP(head.Position)
+            local h = getHead(p)
+            if h then
+                local sp, on = toVP(h.Position)
                 if on then
                     local d = (center - sp).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        best = p
-                    end
+                    if d < bestD then bestD=d; best=p end
                 end
             end
         end
@@ -72,123 +52,111 @@ local function getBestTarget()
     return best
 end
 
--- ══════════════════════════════
---             ESP
--- ══════════════════════════════
+-- ══ ESP (Drawing pur, zero hook) ══
 local ESPs = {}
 
-local function buildESP(p)
-    local box          = Drawing.new("Square")
-    box.Visible        = false
-    box.Color          = Config.ESP.BoxCol
-    box.Thickness      = 1.8
-    box.Filled         = false
-    box.Transparency   = 1
+local function makeESP(p)
+    local box = Drawing.new("Square")
+    box.Visible=false; box.Color=Color3.fromRGB(255,50,50)
+    box.Thickness=1.5; box.Filled=false; box.Transparency=1
 
-    local healthBar    = Drawing.new("Square")
-    healthBar.Visible  = false
-    healthBar.Color    = Color3.fromRGB(0, 255, 80)
-    healthBar.Thickness= 1
-    healthBar.Filled   = true
-    healthBar.Transparency = 0.5
+    local name = Drawing.new("Text")
+    name.Visible=false; name.Color=Color3.fromRGB(255,255,255)
+    name.Size=13; name.Center=true; name.Outline=true
+    name.OutlineColor=Color3.fromRGB(0,0,0)
 
-    local nameTag      = Drawing.new("Text")
-    nameTag.Visible    = false
-    nameTag.Color      = Config.ESP.NameCol
-    nameTag.Size       = 13
-    nameTag.Center     = true
-    nameTag.Outline    = true
-    nameTag.OutlineColor = Color3.fromRGB(0,0,0)
+    local hpBg = Drawing.new("Square")
+    hpBg.Visible=false; hpBg.Color=Color3.fromRGB(30,30,30)
+    hpBg.Thickness=1; hpBg.Filled=true; hpBg.Transparency=0.6
 
-    local tracer       = Drawing.new("Line")
-    tracer.Visible     = false
-    tracer.Color       = Config.ESP.TracerCol
-    tracer.Thickness   = 1
+    local hpBar = Drawing.new("Square")
+    hpBar.Visible=false; hpBar.Thickness=1
+    hpBar.Filled=true; hpBar.Transparency=0.8
 
-    ESPs[p] = { box=box, healthBar=healthBar, nameTag=nameTag, tracer=tracer }
+    local tracer = Drawing.new("Line")
+    tracer.Visible=false; tracer.Color=Color3.fromRGB(255,100,0); tracer.Thickness=1
+
+    ESPs[p] = {box=box, name=name, hpBg=hpBg, hpBar=hpBar, tracer=tracer}
+end
+
+local function hideESP(p)
+    if not ESPs[p] then return end
+    for _, o in pairs(ESPs[p]) do
+        pcall(function() o.Visible = false end)
+    end
 end
 
 local function clearESP(p)
-    if ESPs[p] then
-        for _, o in pairs(ESPs[p]) do pcall(function() o:Remove() end) end
-        ESPs[p] = nil
-    end
+    if not ESPs[p] then return end
+    for _, o in pairs(ESPs[p]) do pcall(function() o:Remove() end) end
+    ESPs[p] = nil
 end
 
 local function tickESP()
     for _, p in ipairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
-        if not ESPs[p] then buildESP(p) end
+        if not ESPs[p] then makeESP(p) end
         local o = ESPs[p]
 
         if not Config.ESP.Enabled or not alive(p) then
-            o.box.Visible       = false
-            o.healthBar.Visible = false
-            o.nameTag.Visible   = false
-            o.tracer.Visible    = false
-            continue
+            hideESP(p); continue
         end
 
         local root = getRoot(p)
         local head = getHead(p)
         local hum  = getHum(p)
-        if not root or not head or not hum then continue end
+        if not root or not head or not hum then hideESP(p); continue end
 
         local dist = (Camera.CFrame.Position - root.Position).Magnitude
-        if dist > Config.ESP.MaxDist then
-            o.box.Visible=false; o.healthBar.Visible=false
-            o.nameTag.Visible=false; o.tracer.Visible=false
-            continue
-        end
+        if dist > Config.ESP.MaxDist then hideESP(p); continue end
 
-        local top, topOn = toVP(head.Position + Vector3.new(0,1.3,0))
-        local bot, botOn = toVP(root.Position - Vector3.new(0,3.5,0))
+        local top, topOn = toVP(head.Position + Vector3.new(0, 1.2, 0))
+        local bot, botOn = toVP(root.Position - Vector3.new(0, 3.2, 0))
 
-        if topOn and botOn then
-            local h = math.abs(bot.Y - top.Y)
-            local w = h * 0.42
+        if not (topOn or botOn) then hideESP(p); continue end
 
-            -- Box
-            o.box.Visible   = true
-            o.box.Size      = Vector2.new(w, h)
-            o.box.Position  = Vector2.new(top.X - w/2, top.Y)
+        local h = math.abs(bot.Y - top.Y)
+        local w = h * 0.45
+        local x = top.X - w/2
 
-            -- Health bar (gauche de la box)
-            local hpRatio   = hum.Health / hum.MaxHealth
-            o.healthBar.Visible   = true
-            o.healthBar.Size      = Vector2.new(3, h * hpRatio)
-            o.healthBar.Position  = Vector2.new(top.X - w/2 - 6, top.Y + h*(1-hpRatio))
-            o.healthBar.Color     = Color3.fromRGB(
-                math.floor((1-hpRatio)*255),
-                math.floor(hpRatio*255), 0
-            )
+        -- Box
+        o.box.Visible  = true
+        o.box.Size     = Vector2.new(w, h)
+        o.box.Position = Vector2.new(x, top.Y)
 
-            -- Name + dist
-            o.nameTag.Visible   = true
-            o.nameTag.Text      = p.Name .. "  [" .. math.floor(dist) .. "m]"
-            o.nameTag.Position  = Vector2.new(top.X, top.Y - 15)
+        -- Nom
+        o.name.Visible   = true
+        o.name.Text      = p.Name .. " [" .. math.floor(dist) .. "m]"
+        o.name.Position  = Vector2.new(top.X, top.Y - 14)
 
-            -- Tracer depuis bas écran
-            local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-            o.tracer.Visible = true
-            o.tracer.From    = center
-            o.tracer.To      = Vector2.new(bot.X, bot.Y)
-        else
-            o.box.Visible=false; o.healthBar.Visible=false
-            o.nameTag.Visible=false; o.tracer.Visible=false
-        end
+        -- Health bar
+        local ratio = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+        o.hpBg.Visible   = true
+        o.hpBg.Size      = Vector2.new(4, h)
+        o.hpBg.Position  = Vector2.new(x - 7, top.Y)
+
+        o.hpBar.Visible  = true
+        o.hpBar.Size     = Vector2.new(4, h * ratio)
+        o.hpBar.Position = Vector2.new(x - 7, top.Y + h * (1 - ratio))
+        o.hpBar.Color    = Color3.fromRGB(
+            math.floor((1 - ratio) * 255),
+            math.floor(ratio * 255), 0
+        )
+
+        -- Tracer
+        o.tracer.Visible = true
+        o.tracer.From    = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+        o.tracer.To      = Vector2.new(bot.X, bot.Y)
     end
 end
 
 Players.PlayerRemoving:Connect(clearESP)
 
--- ══════════════════════════════
---           AIMBOT
--- ══════════════════════════════
+-- ══ AIMBOT (RenderStepped, pas de hook) ══
 RunService.RenderStepped:Connect(function()
     tickESP()
     if not Config.Aimbot.Enabled then return end
-    local t = getBestTarget()
+    local t = getBest()
     if not t then return end
     local head = getHead(t)
     if not head then return end
@@ -203,265 +171,93 @@ RunService.RenderStepped:Connect(function()
     )
 end)
 
--- ══════════════════════════════
---   SILENT AIM — Arena Deagle
---   Hook __namecall propre,
---   zero flood garanti
--- ══════════════════════════════
-if Config.SilentAim.Enabled then
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    local oldNC = mt.__namecall
-    mt.__namecall = function(self, ...)
-        local m = getnamecallmethod()
-        if (m == "FireServer" or m == "InvokeServer") and
-           (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) then
-            local t = getBestTarget()
-            if t then
-                local hp = getHead(t)
-                if hp then
-                    local args = {...}
-                    for i, v in ipairs(args) do
-                        if typeof(v) == "CFrame" then
-                            args[i] = CFrame.new(hp.Position)
-                        elseif typeof(v) == "Vector3" then
-                            args[i] = hp.Position
-                        elseif typeof(v) == "Instance" and v:IsA("BasePart") then
-                            args[i] = hp
-                        end
-                    end
-                    return oldNC(self, table.unpack(args))
-                end
-            end
-        end
-        return oldNC(self, ...)
-    end
-    setreadonly(mt, true)
-end
-
--- ══════════════════════════════
---         WALL SHOOT
--- ══════════════════════════════
-if Config.WallShoot.Enabled then
-    local function noCollide(char)
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then
-                pcall(function() p.CanCollide = false end)
-            end
-        end
-        char.DescendantAdded:Connect(function(d)
-            if d:IsA("BasePart") then
-                pcall(function() d.CanCollide = false end)
-            end
-        end)
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            if p.Character then noCollide(p.Character) end
-            p.CharacterAdded:Connect(noCollide)
-        end
-    end
-    Players.PlayerAdded:Connect(function(p)
-        if p ~= LocalPlayer then
-            p.CharacterAdded:Connect(noCollide)
-        end
-    end)
-end
-
--- ══════════════════════════════
---          KILL ALL
--- ══════════════════════════════
-local function killAll()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and alive(p) then
-            local hum = getHum(p)
-            if hum then
-                pcall(function() hum.Health = 0 end)
-                -- Cherche RemoteEvent de dégâts dans le jeu
-                for _, re in ipairs(workspace:GetDescendants()) do
-                    if re:IsA("RemoteEvent") and
-                       (re.Name:lower():find("damage") or
-                        re.Name:lower():find("hit") or
-                        re.Name:lower():find("kill")) then
-                        pcall(function() re:FireServer(hum, 9999) end)
-                    end
-                end
-            end
-        end
-    end
-end
-
--- ══════════════════════════════
---         GUI ANIMÉ
--- ══════════════════════════════
+-- ══ GUI ══
 local SG = Instance.new("ScreenGui")
-SG.Name = "ARAI_v3"
-SG.ResetOnSpawn = false
-SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-SG.Parent = game.CoreGui
+SG.Name="ARAI4"; SG.ResetOnSpawn=false
+SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+SG.Parent=game.CoreGui
 
 local MF = Instance.new("Frame")
-MF.Size = UDim2.new(0, 330, 0, 420)
-MF.Position = UDim2.new(0.5, -165, -1, 0)
-MF.BackgroundColor3 = Color3.fromRGB(8, 8, 16)
-MF.BorderSizePixel = 0
-MF.Parent = SG
-Instance.new("UICorner", MF).CornerRadius = UDim.new(0, 14)
+MF.Size=UDim2.new(0,300,0,200)
+MF.Position=UDim2.new(0.5,-150,-1,0)
+MF.BackgroundColor3=Color3.fromRGB(8,8,16)
+MF.BorderSizePixel=0; MF.Parent=SG
+Instance.new("UICorner",MF).CornerRadius=UDim.new(0,12)
 
--- Glow animé
-local stroke = Instance.new("UIStroke", MF)
-stroke.Thickness = 2
+local stroke=Instance.new("UIStroke",MF); stroke.Thickness=2
 task.spawn(function()
-    local t = 0
+    local t=0
     while task.wait(0.02) do
-        t += 0.06
-        stroke.Color = Color3.fromRGB(
-            math.floor(math.abs(math.sin(t)) * 255),
-            0,
-            math.floor(math.abs(math.cos(t)) * 255)
+        t+=0.06
+        stroke.Color=Color3.fromRGB(
+            math.floor(math.abs(math.sin(t))*255),0,
+            math.floor(math.abs(math.cos(t))*255)
         )
     end
 end)
 
--- Header
-local Header = Instance.new("Frame")
-Header.Size = UDim2.new(1, 0, 0, 44)
-Header.BackgroundColor3 = Color3.fromRGB(18, 0, 36)
-Header.BorderSizePixel = 0
-Header.Parent = MF
-Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
+local hdr=Instance.new("Frame",MF)
+hdr.Size=UDim2.new(1,0,0,40); hdr.BackgroundColor3=Color3.fromRGB(18,0,36)
+hdr.BorderSizePixel=0
+Instance.new("UICorner",hdr).CornerRadius=UDim.new(0,10)
 
-local TitleLbl = Instance.new("TextLabel")
-TitleLbl.Size = UDim2.new(1, 0, 1, 0)
-TitleLbl.BackgroundTransparency = 1
-TitleLbl.TextColor3 = Color3.fromRGB(220, 90, 255)
-TitleLbl.Font = Enum.Font.GothamBold
-TitleLbl.TextSize = 15
-TitleLbl.Text = "⚡ AR-AI v3.0  |  Arena Deagle  |  CTRL"
-TitleLbl.Parent = Header
+local ttl=Instance.new("TextLabel",hdr)
+ttl.Size=UDim2.new(1,0,1,0); ttl.BackgroundTransparency=1
+ttl.TextColor3=Color3.fromRGB(210,80,255); ttl.Font=Enum.Font.GothamBold
+ttl.TextSize=14; ttl.Text="⚡ AR-AI v4.0  |  CTRL = hide"
 
--- Drag
-local drag, ds, sp = false, nil, nil
-Header.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        drag = true; ds = i.Position; sp = MF.Position
+local drag,ds,sp=false,nil,nil
+hdr.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=true; ds=i.Position; sp=MF.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(i)
-    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = i.Position - ds
-        MF.Position = UDim2.new(sp.X.Scale, sp.X.Offset+d.X, sp.Y.Scale, sp.Y.Offset+d.Y)
+    if drag and i.UserInputType==Enum.UserInputType.MouseMovement then
+        local d=i.Position-ds
+        MF.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
     end
 end)
 UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
 end)
 
--- Layout
-local Pad = Instance.new("UIPadding", MF)
-Pad.PaddingTop = UDim.new(0, 52)
-Pad.PaddingLeft = UDim.new(0, 12)
-Pad.PaddingRight = UDim.new(0, 12)
-Pad.PaddingBottom = UDim.new(0, 12)
+local pad=Instance.new("UIPadding",MF)
+pad.PaddingTop=UDim.new(0,48); pad.PaddingLeft=UDim.new(0,10)
+pad.PaddingRight=UDim.new(0,10); pad.PaddingBottom=UDim.new(0,10)
 
-local Layout = Instance.new("UIListLayout", MF)
-Layout.SortOrder = Enum.SortOrder.LayoutOrder
-Layout.Padding = UDim.new(0, 8)
+local layout=Instance.new("UIListLayout",MF)
+layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Padding=UDim.new(0,8)
 
--- Toggle factory
-local function makeToggle(label, cfg, key)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 40)
-    btn.BackgroundColor3 = cfg[key]
-        and Color3.fromRGB(70, 0, 120)
-        or  Color3.fromRGB(22, 22, 32)
-    btn.TextColor3 = Color3.fromRGB(240, 240, 255)
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextSize = 14
-    btn.Text = (cfg[key] and "✅  " or "❌  ") .. label
-    btn.AutoButtonColor = false
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    Instance.new("UIStroke", btn).Color = Color3.fromRGB(80, 0, 140)
-    btn.Parent = MF
-
-    btn.MouseButton1Click:Connect(function()
-        cfg[key] = not cfg[key]
-        btn.Text = (cfg[key] and "✅  " or "❌  ") .. label
-        btn.BackgroundColor3 = cfg[key]
-            and Color3.fromRGB(70, 0, 120)
-            or  Color3.fromRGB(22, 22, 32)
-        TweenService:Create(btn,
-            TweenInfo.new(0.12, Enum.EasingStyle.Bounce),
-            {BackgroundTransparency = 0.5}
-        ):Play()
-        task.wait(0.15)
-        TweenService:Create(btn,
-            TweenInfo.new(0.1),
-            {BackgroundTransparency = 0}
-        ):Play()
+local function makeBtn(label, cfg, key)
+    local b=Instance.new("TextButton",MF)
+    b.Size=UDim2.new(1,0,0,38)
+    b.BackgroundColor3=cfg[key] and Color3.fromRGB(65,0,110) or Color3.fromRGB(20,20,30)
+    b.TextColor3=Color3.fromRGB(240,240,255); b.Font=Enum.Font.GothamSemibold
+    b.TextSize=14; b.AutoButtonColor=false
+    b.Text=(cfg[key] and "✅  " or "❌  ")..label
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)
+    b.MouseButton1Click:Connect(function()
+        cfg[key]=not cfg[key]
+        b.Text=(cfg[key] and "✅  " or "❌  ")..label
+        b.BackgroundColor3=cfg[key] and Color3.fromRGB(65,0,110) or Color3.fromRGB(20,20,30)
     end)
 end
 
-makeToggle("ESP + Health Bar", Config.ESP,       "Enabled")
-makeToggle("Aimbot",           Config.Aimbot,    "Enabled")
-makeToggle("Silent Aim",       Config.SilentAim, "Enabled")
-makeToggle("Wall Shoot",       Config.WallShoot, "Enabled")
+makeBtn("ESP + Health Bar", Config.ESP,    "Enabled")
+makeBtn("Aimbot",           Config.Aimbot, "Enabled")
 
--- Kill All bouton
-local kBtn = Instance.new("TextButton")
-kBtn.Size = UDim2.new(1, 0, 0, 46)
-kBtn.BackgroundColor3 = Color3.fromRGB(160, 0, 0)
-kBtn.TextColor3 = Color3.fromRGB(255,255,255)
-kBtn.Font = Enum.Font.GothamBold
-kBtn.TextSize = 15
-kBtn.Text = "💀  EXECUTE KILL ALL  💀"
-kBtn.AutoButtonColor = false
-Instance.new("UICorner", kBtn).CornerRadius = UDim.new(0, 10)
-kBtn.Parent = MF
-
-kBtn.MouseButton1Click:Connect(function()
-    local root = LocalPlayer.Character
-        and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if root then
-        for i = 1, 10 do
-            task.wait(0.04)
-            local pt = Instance.new("Part")
-            pt.Anchored = true; pt.CanCollide = false
-            pt.Material = Enum.Material.Neon
-            pt.Size = Vector3.new(0.15,0.15,0.15)
-            pt.Color = Color3.fromRGB(255, math.random(0,60), 0)
-            pt.CFrame = root.CFrame * CFrame.new(
-                math.random(-6,6), 0, math.random(-6,6)
-            )
-            pt.Parent = workspace
-            TweenService:Create(pt,
-                TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                {Size = Vector3.new(4,0.05,4), Transparency = 1}
-            ):Play()
-            game:GetService("Debris"):AddItem(pt, 0.5)
-        end
-    end
-    killAll()
-    TweenService:Create(kBtn, TweenInfo.new(0.08),
-        {BackgroundColor3 = Color3.fromRGB(255,60,0)}):Play()
-    task.wait(0.25)
-    TweenService:Create(kBtn, TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(160,0,0)}):Play()
-end)
-
--- ══════════════════════════════
---   TOGGLE MENU — LeftControl
--- ══════════════════════════════
+-- CTRL toggle
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.LeftControl then
-        MF.Visible = not MF.Visible
+    if not gpe and input.KeyCode==Enum.KeyCode.LeftControl then
+        MF.Visible=not MF.Visible
     end
 end)
 
--- Entrance animation
+-- Entrance
 TweenService:Create(MF,
-    TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    {Position = UDim2.new(0.5, -165, 0.5, -210)}
+    TweenInfo.new(0.6,Enum.EasingStyle.Back,Enum.EasingDirection.Out),
+    {Position=UDim2.new(0.5,-150,0.5,-100)}
 ):Play()
 
-print("[AR-AI v3.0] loaded — CTRL toggle menu")
+print("[AR-AI v4.0] OK — CTRL toggle")
